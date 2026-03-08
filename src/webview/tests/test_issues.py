@@ -111,6 +111,19 @@ def test_maintainer_of_active_package_mentioned_in_issue(
     accepted_suggestion = make_suggestion(
         status=CVEDerivationClusterProposal.Status.ACCEPTED
     )
+
+    container = accepted_suggestion.cve.container.first()
+    assert container
+    metric = container.metrics.first()
+    assert metric
+    metric.raw_cvss_json = {
+        "version": "3.1",
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "baseScore": 9.8,
+        "baseSeverity": "CRITICAL",
+    }
+    metric.save()
+
     cache_new_suggestions(accepted_suggestion)
 
     as_staff.goto(live_server.url + reverse("webview:suggestion:accepted_suggestions"))
@@ -172,6 +185,9 @@ def test_maintainer_of_active_package_mentioned_in_issue(
     mock_repo.create_issue.assert_called_once()
     issue_body = mock_repo.create_issue.call_args[1]["body"]
     maintainer_handle = drv.metadata.maintainers.first().github
+
+    assert "**Severity:** 🔴 Critical (9.8)" in issue_body
+    assert "CVSS CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" in issue_body
 
     if ignore_package:
         assert f"@{maintainer_handle}" not in issue_body
