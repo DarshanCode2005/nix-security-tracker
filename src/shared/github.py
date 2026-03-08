@@ -1,5 +1,6 @@
 import logging
 from urllib.parse import quote
+from typing import Any
 
 from django.conf import settings
 from django.template.defaultfilters import truncatewords
@@ -10,6 +11,52 @@ from shared.models import CachedSuggestions
 from webview.templatetags.viewutils import severity_badge
 
 logger = logging.getLogger(__name__)
+
+
+def severity_from_score(score: float) -> str:
+    if score >= 9.0:
+        return "CRITICAL"
+    if score >= 7.0:
+        return "HIGH"
+    if score >= 4.0:
+        return "MEDIUM"
+    if score > 0.0:
+        return "LOW"
+    return "NONE"
+
+
+def severity_emoji(severity: str) -> str:
+    return {
+        "CRITICAL": "🔴",
+        "HIGH": "🟠",
+        "MEDIUM": "🟡",
+        "LOW": "🟢",
+        "NONE": "⚪",
+    }.get(severity, "⚪")
+
+
+def cvss_summary(metric: dict[str, Any]) -> str:
+    score = metric.get("baseScore")
+    severity = metric.get("baseSeverity")
+
+    parsed_score: float | None = None
+    if score is not None:
+        try:
+            parsed_score = float(score)
+        except (TypeError, ValueError):
+            parsed_score = None
+
+    if not severity and parsed_score is not None:
+        severity = severity_from_score(parsed_score)
+
+    if parsed_score is None or not severity:
+        return ""
+
+    severity_normalized = str(severity).upper()
+    return (
+        f"> **Severity:** {severity_emoji(severity_normalized)} "
+        f"{severity_normalized.title()} ({parsed_score:.1f})\n\n"
+    )
 
 
 def get_gh(per_page: int = 30) -> Github:
@@ -56,9 +103,18 @@ def create_gh_issue(
     def cvss_details() -> str:
         metric = severity_badge(cached_suggestion.payload["metrics"])
         if metric:
+            raw_metric = next(
+                (
+                    m.get("raw_cvss_json", {})
+                    for m in cached_suggestion.payload["metrics"]
+                    if "vectorString" in m.get("raw_cvss_json", {})
+                ),
+                {},
+            )
+            summary = cvss_summary(raw_metric)
             metrics = "\n".join([f"- {k}: {v}" for k, v in metric["metrics"].items()])
             return f"""
-<details>
+{summary}<details>
 <summary>CVSS {metric["vectorString"]}</summary>
 
 - CVSS version: {metric["version"]}
