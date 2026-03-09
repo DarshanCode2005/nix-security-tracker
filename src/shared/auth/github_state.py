@@ -99,7 +99,15 @@ class GithubState:
         Update group membership from the payload received via GitHub webhook.
         """
 
-        user: User = User.objects.get(socialaccount__uid=github_user_id)
+        try:
+            user: User = User.objects.get(
+                socialaccount__provider="github", socialaccount__uid=github_user_id
+            )
+        except (User.DoesNotExist, User.MultipleObjectsReturned):
+            logger.warning(
+                "Could not find a unique GitHub-linked user for UID %s", github_user_id
+            )
+            return
 
         if self.security_team.id == github_team_id:
             if action == "added":
