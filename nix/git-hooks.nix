@@ -61,5 +61,20 @@
       prettier = {
         enable = true;
       };
+    }
+    // {
+      # Documentation
+      lychee = {
+        enable = true;
+        name = "lychee";
+        entry = "${pkgs.lib.getExe pkgs.lychee} --offline --no-progress docs/";
+        files = "\\.md$";
+        pass_filenames = false;
+        inherit excludes;
+        stages = [
+          "manual"
+          "pre-commit"
+        ];
+      };
     };
 }
