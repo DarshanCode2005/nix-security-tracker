@@ -232,7 +232,7 @@ This is the default Django workflow.
 
 ## `pgpubsub` listener registration pattern
 
-The application uses `django-pgpubsub` to react to database changes asynchronously.
+The application uses [`django-pgpubsub`](https://github.com/PaulGilmartin/django-pgpubsub) to react to database changes asynchronously.
 Listeners are defined as functions decorated with `@pgpubsub.post_insert_listener`, `@pgpubsub.post_update_listener` etc., and are primarily located in the [`src/shared/listeners/`](src/shared/listeners/) directory.
 
 To ensure your listener is proactively registered when the Django application starts, its containing module must be imported.
