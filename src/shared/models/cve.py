@@ -241,7 +241,7 @@ class Metric(models.Model):
         default=None,
     )
 
-    class Meta:
+    class Meta:  # type: ignore[override]
         constraints = [
             models.CheckConstraint(
                 condition=Q(base_score__gte=0.0, base_score__lte=10.0),
