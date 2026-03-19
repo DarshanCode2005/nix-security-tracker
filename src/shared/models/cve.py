@@ -310,7 +310,7 @@ class Version(models.Model):
         else:
             return None
 
-    def affects(self, version: str) -> str:
+    def affects(self, version: str | None) -> str:
         """
         Determines wether a given version string is affected by this version constraint
         FIXME(kerstin): We currently compare versions by comparing strings, which is really wrong.
