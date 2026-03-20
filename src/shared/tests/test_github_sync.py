@@ -361,13 +361,11 @@ class GithubSyncTests(TestCase):
         apps.get_app_config("shared").github_state = gh_state  # type: ignore
 
         # Create a malicious Google account using the same UID as an intended victim
-        victim_github_uid = 88888 
-        
+        victim_github_uid = 88888
+
         malicious_user = User.objects.create_user(username="malicious-google-user")
         SocialAccount.objects.create(
-            user=malicious_user,
-            provider="google",
-            uid=str(victim_github_uid)
+            user=malicious_user, provider="google", uid=str(victim_github_uid)
         )
 
         payload = {
