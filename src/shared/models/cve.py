@@ -5,10 +5,7 @@ from django.db import models
 from django.db.models import Index, Q
 from django.utils.translation import gettext_lazy as _
 from pgtrigger import UpdateSearchVector
-
-
-def text_length(choices: type[models.TextChoices]) -> int:
-    return max(map(len, choices.values))
+from .utils import text_length
 
 
 class Organization(models.Model):
