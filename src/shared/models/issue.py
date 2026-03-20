@@ -1,16 +1,14 @@
 import logging
 from enum import STRICT, IntFlag, auto
 from typing import Any
-
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
-
-from shared.models.cve import text_length
 from shared.models.linkage import CVEDerivationClusterProposal
 from shared.models.nix_evaluation import TimeStampMixin
+from .utils import text_length
 
 logger = logging.getLogger(__name__)
 
