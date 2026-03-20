@@ -1,19 +1,14 @@
 from enum import STRICT, IntFlag
 from typing import Any
-
 import pghistory
 from django.db import models
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
-
 import shared.models.cached
 from shared.models.cve import CveRecord
 from shared.models.nix_evaluation import NixDerivation, NixMaintainer, TimeStampMixin
-
-
-def text_length(choices: type[models.TextChoices]) -> int:
-    return max(map(len, choices.values))
+from .utils import text_length
 
 
 @pghistory.track(
