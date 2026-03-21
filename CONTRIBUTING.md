@@ -13,6 +13,27 @@ It contains general contribution information, and lists resources to help you ge
 
 Other directories in this repository have additional `README.md` files with more specific information relevant to their sibling files.
 
+## System Architecture and Project Structure
+
+The security tracker is a distributed system where Nix manages the infrastructure and services, while Django handles the application logic and web interface.
+
+### How the system spins up
+
+The entire system architecture and its service definitions are contained in [`nix/configuration.nix`](nix/configuration.nix). This file defines the various components that make up the tracker:
+
+- **Web Server (`nix-security-tracker-server`)**: A Daphne ASGI server running the Django application.
+- **Evaluator (`nix-security-tracker-evaluator`)**: A specialized worker that runs `nix-eval-jobs` to ingest Nixpkgs derivations.
+- **Background Worker (`nix-security-tracker-worker`)**: A generic job processor that listens for database events (via `pgpubsub`) to handle asynchronous tasks like cache regeneration or notifications.
+- **Cron Jobs**: Scheduled tasks for fetching channel information and CVE deltas.
+
+### Codebase Organization
+
+The core business logic and web application reside in the [`src/`](src/) directory. From here, it follows standard Django patterns:
+
+- [`src/shared/`](src/shared/): Contains the core logic shared across all services, including database models, migrations, background listeners, and common utility functions.
+- [`src/webview/`](src/webview/): Contains the web interface implementation, including views, templates, and static assets (CSS/JS).
+- [`src/project/`](src/project/): Contains the Django project configuration (`settings.py`, `urls.py`, `asgi.py`).
+
 # Hacking
 
 The service is implemented in Python using [Django](https://www.djangoproject.com/).
