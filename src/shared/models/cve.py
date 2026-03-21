@@ -116,7 +116,10 @@ class Description(models.Model):
 class Tag(models.Model):
     """Class representing a tag related to a CVE record."""
 
-    value = models.CharField(max_length=128)
+    value = models.CharField(max_length=128, unique=True)
+
+    def __str__(self) -> str:
+        return self.value
 
 
 class Reference(models.Model):
