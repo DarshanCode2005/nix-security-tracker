@@ -1,9 +1,14 @@
 from collections.abc import Callable
 from datetime import timedelta
 
-from shared.listeners.cache_suggestions import cache_new_suggestions
+import pytest
+
+from shared.listeners.cache_suggestions import (
+    cache_new_suggestions,
+    is_version_affected,
+)
 from shared.models.cached import CachedSuggestions
-from shared.models.cve import Container
+from shared.models.cve import Container, Version
 from shared.models.linkage import (
     CVEDerivationClusterProposal,
     DerivationClusterProposalLink,
@@ -70,3 +75,44 @@ def test_caching_newest_package(
     )
 
     assert package["major_version"] == "2.0"
+
+
+@pytest.mark.parametrize(
+    "statuses, expected",
+    [
+        ([], Version.Status.UNKNOWN),
+        ([Version.Status.AFFECTED], Version.Status.AFFECTED),
+        ([Version.Status.UNAFFECTED], Version.Status.UNKNOWN),
+        ([Version.Status.UNKNOWN], Version.Status.UNKNOWN),
+        ([Version.Status.AFFECTED, Version.Status.AFFECTED], Version.Status.AFFECTED),
+        ([Version.Status.AFFECTED, Version.Status.UNAFFECTED], Version.Status.AFFECTED),
+        ([Version.Status.AFFECTED, Version.Status.UNKNOWN], Version.Status.AFFECTED),
+        ([Version.Status.UNAFFECTED, Version.Status.AFFECTED], Version.Status.AFFECTED),
+        (
+            [Version.Status.UNAFFECTED, Version.Status.UNAFFECTED],
+            Version.Status.UNKNOWN,
+        ),
+        ([Version.Status.UNAFFECTED, Version.Status.UNKNOWN], Version.Status.UNKNOWN),
+        ([Version.Status.UNKNOWN, Version.Status.AFFECTED], Version.Status.AFFECTED),
+        ([Version.Status.UNKNOWN, Version.Status.UNAFFECTED], Version.Status.UNKNOWN),
+        ([Version.Status.UNKNOWN, Version.Status.UNKNOWN], Version.Status.UNKNOWN),
+        (
+            [
+                Version.Status.AFFECTED,
+                Version.Status.UNAFFECTED,
+                Version.Status.UNKNOWN,
+            ],
+            Version.Status.AFFECTED,
+        ),
+        (
+            [
+                Version.Status.UNAFFECTED,
+                Version.Status.UNAFFECTED,
+                Version.Status.UNAFFECTED,
+            ],
+            Version.Status.UNKNOWN,
+        ),
+    ],
+)
+def test_is_version_affected(statuses: list[str], expected: Version.Status) -> None:
+    assert is_version_affected(statuses) == expected
