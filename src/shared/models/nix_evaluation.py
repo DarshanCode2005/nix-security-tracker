@@ -4,7 +4,6 @@ from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from pgtrigger import UpdateSearchVector
-from .utils import text_length
 
 
 class TimeStampMixin(models.Model):
@@ -162,9 +161,7 @@ class NixChannel(TimeStampMixin):
     channel_branch = models.CharField(max_length=255, primary_key=True)
     # The currently known HEAD SHA1 commit of that channel.
     head_sha1_commit = models.CharField(max_length=255)
-    state = models.CharField(
-        max_length=text_length(ChannelState), choices=ChannelState.choices
-    )
+    state = models.CharField(max_length=126, choices=ChannelState.choices)
     release_version = models.CharField(max_length=255, null=True)
     # Repository can be stored as URLs for now...
     # We can always reparse them as proper GitHub URIs if necessary
@@ -210,9 +207,7 @@ class NixEvaluation(TimeStampMixin):
     # Commit SHA1 on which the evaluation was done precisely.
     commit_sha1 = models.CharField(max_length=255)
     # State in which the evaluation is in.
-    state = models.CharField(
-        max_length=text_length(EvaluationState), choices=EvaluationState.choices
-    )
+    state = models.CharField(max_length=126, choices=EvaluationState.choices)
     # How many times have been we trying to evaluate
     # this? We use it for the crash backoff loop.
     attempt = models.IntegerField(default=0)
