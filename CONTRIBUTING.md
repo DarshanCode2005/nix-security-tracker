@@ -13,10 +13,6 @@ It contains general contribution information, and lists resources to help you ge
 
 Other directories in this repository have additional `README.md` files with more specific information relevant to their sibling files.
 
-## System Architecture and Project Structure
-
-The security tracker is a distributed system where Nix manages the infrastructure and services, while Django handles the application logic and web interface.
-
 Service definitions are in [`nix/configuration.nix`](nix/configuration.nix).
 
 Application logic lives in the [`src/`](src/) directory.
