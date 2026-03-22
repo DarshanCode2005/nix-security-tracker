@@ -1,14 +1,15 @@
 from enum import STRICT, IntFlag
 from typing import Any
+
 import pghistory
 from django.db import models
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
+
 import shared.models.cached
 from shared.models.cve import CveRecord
 from shared.models.nix_evaluation import NixDerivation, NixMaintainer, TimeStampMixin
-from .utils import text_length
 
 
 @pghistory.track(
@@ -49,7 +50,7 @@ class CVEDerivationClusterProposal(TimeStampMixin):
     )
 
     status = models.CharField(
-        max_length=text_length(Status), choices=Status.choices, default=Status.PENDING
+        max_length=126, choices=Status.choices, default=Status.PENDING
     )
 
     comment = models.CharField(
@@ -106,9 +107,7 @@ class MaintainersEdit(models.Model):
         ADD = "add", _("add")
         REMOVE = "remove", _("remove")
 
-    edit_type = models.CharField(
-        max_length=text_length(EditType), choices=EditType.choices
-    )
+    edit_type = models.CharField(max_length=126, choices=EditType.choices)
     maintainer = models.ForeignKey(NixMaintainer, on_delete=models.CASCADE)
     suggestion = models.ForeignKey(
         CVEDerivationClusterProposal,
@@ -140,9 +139,7 @@ class PackageEdit(models.Model):
         REMOVE = "remove", _("remove")
         # ADD reserved for future use if needed
 
-    edit_type = models.CharField(
-        max_length=text_length(EditType), choices=EditType.choices
-    )
+    edit_type = models.CharField(max_length=126, choices=EditType.choices)
     package_attribute = models.CharField(max_length=255)
     suggestion = models.ForeignKey(
         CVEDerivationClusterProposal,
