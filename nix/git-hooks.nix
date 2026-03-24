@@ -78,19 +78,13 @@
             scope: heading
             # $title, $sentence, $lower, $upper, or a pattern.
             match: $sentence
-            indicators:
-              # For headers like `1. Foo`
-              - "."
             exceptions:
-              - macOS
               - Nix
-              - I
-              - GNOME
           '';
 
           valeStylesDir = pkgs.runCommand "vale-styles" { } ''
-            mkdir -p $out/NixDev
-            cp ${valeSentenceCaseRule} $out/NixDev/SentenceCase.yml
+            mkdir -p $out/default
+            cp ${valeSentenceCaseRule} $out/default/SentenceCase.yml
           '';
 
           valeConfig = pkgs.writeText "vale.ini" ''
@@ -98,7 +92,7 @@
             MinAlertLevel = suggestion
 
             [*.md]
-            BasedOnStyles = NixDev
+            BasedOnStyles = default
           '';
         in
         {
