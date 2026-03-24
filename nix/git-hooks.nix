@@ -68,5 +68,44 @@
         entry = "${pkgs.lib.getExe pkgs.lychee} --offline --no-progress";
         files = "\\.md$";
       };
+
+      vale =
+        let
+          valeSentenceCaseRule = pkgs.writeText "SentenceCase.yml" ''
+            extends: capitalization
+            message: "Should be in sentence case: '%s'"
+            level: error
+            scope: heading
+            # $title, $sentence, $lower, $upper, or a pattern.
+            match: $sentence
+            indicators:
+              # For headers like `1. Foo`
+              - "."
+            exceptions:
+              - macOS
+              - Nix
+              - I
+              - GNOME
+          '';
+
+          valeStylesDir = pkgs.runCommand "vale-styles" { } ''
+            mkdir -p $out/NixDev
+            cp ${valeSentenceCaseRule} $out/NixDev/SentenceCase.yml
+          '';
+
+          valeConfig = pkgs.writeText "vale.ini" ''
+            StylesPath = ${valeStylesDir}
+            MinAlertLevel = suggestion
+
+            [*.md]
+            BasedOnStyles = NixDev
+          '';
+        in
+        {
+          enable = true;
+          name = "vale";
+          entry = "${pkgs.lib.getExe pkgs.vale} --config=${valeConfig}";
+          files = "\\.md$";
+        };
     };
 }
