@@ -71,7 +71,7 @@
 
       vale =
         let
-          valeSentenceCaseRule = pkgs.writeText "SentenceCase.yml" ''
+          sentence-case = pkgs.writeText "SentenceCase.yml" ''
             extends: capitalization
             message: "Should be in sentence case: '%s'"
             level: error
@@ -93,13 +93,13 @@
               - SSH
           '';
 
-          valeStylesDir = pkgs.runCommand "vale-styles" { } ''
+          styles-dir = pkgs.runCommand "vale-styles" { } ''
             mkdir -p $out/default
-            cp ${valeSentenceCaseRule} $out/default/SentenceCase.yml
+            cp ${sentence-case} $out/default/SentenceCase.yml
           '';
 
-          valeConfig = pkgs.writeText "vale.ini" ''
-            StylesPath = ${valeStylesDir}
+          vale-config = pkgs.writeText "vale.ini" ''
+            StylesPath = ${styles-dir}
             MinAlertLevel = suggestion
 
             [*.md]
@@ -109,7 +109,7 @@
         {
           enable = true;
           name = "vale";
-          entry = "${pkgs.lib.getExe pkgs.vale} --config=${valeConfig}";
+          entry = "${pkgs.lib.getExe pkgs.vale} --config=${vale-config}";
           files = "\\.md$";
         };
     };
