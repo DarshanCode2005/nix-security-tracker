@@ -87,6 +87,7 @@
               - CVEs
               - Sentry
               - Hetzner
+              - Hetzner Cloud
               - Terraform
               - OpenTofu
               - SSH

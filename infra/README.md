@@ -3,7 +3,7 @@
 This directory contains the infrastructure configuration for the Nixpkgs Security Tracker.
 This includes both the NixOS configuration as well as the Terraform/OpenTofu files to spin up the resources.
 
-## Hetzner cloud
+## Hetzner Cloud
 
 The infrastructure currently resides in [Hetzner Cloud](https://www.hetzner.com/cloud/), under the `nixpkgs-security-tracker` project.
 To request access to the project on Hetzner Cloud, contact the [NixOS infrastructure team](https://nixos.org/community/teams/infrastructure/).
