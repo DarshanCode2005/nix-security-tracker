@@ -80,6 +80,16 @@
             match: $sentence
             exceptions:
               - Nix
+              - Nixpkgs
+              - CPE
+              - CPEs
+              - CVE
+              - CVEs
+              - Sentry
+              - Hetzner
+              - Terraform
+              - OpenTofu
+              - SSH
           '';
 
           valeStylesDir = pkgs.runCommand "vale-styles" { } ''
