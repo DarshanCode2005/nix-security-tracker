@@ -16,14 +16,21 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from github.GitRelease import GitRelease
 
-from shared.bulk_ingestion import CveBulkContext, prepare_cve, flush, update_search_vectors
-from shared.fetchers import make_cve
+from shared.bulk_ingestion import (
+    CveBulkContext,
+    flush,
+    prepare_cve,
+    update_search_vectors,
+)
 from shared.github import get_gh
 from shared.models import CveIngestion
 
 logger = logging.getLogger(__name__)
 
-def prepare_batch(cve_batch_paths: list[str], from_date: date, to_date: date) -> tuple[int, CveBulkContext]:
+
+def prepare_batch(
+    cve_batch_paths: list[str], from_date: date, to_date: date
+) -> tuple[int, CveBulkContext]:
     """Runs in worker process to parse JSON and build Django models."""
     ctx = CveBulkContext()
     count = 0
@@ -47,8 +54,9 @@ def prepare_batch(cve_batch_paths: list[str], from_date: date, to_date: date) ->
 
             prepare_cve(cve_json, ctx=ctx, triaged=False)
             count += 1
-                
+
     return count, ctx
+
 
 class Command(BaseCommand):
     help = "Ingest CVEs in bulk using the Mitre CVE repo"
@@ -163,16 +171,19 @@ class Command(BaseCommand):
         with transaction.atomic():
             batch_size = 5000
             total_count = 0
-            
+
             # Chunk cve_list into sub-lists
-            chunks = [cve_list[i:i + batch_size] for i in range(0, len(cve_list), batch_size)]
-            
+            chunks = [
+                cve_list[i : i + batch_size]
+                for i in range(0, len(cve_list), batch_size)
+            ]
+
             with ProcessPoolExecutor(max_workers=4) as executor:
                 futures = {
                     executor.submit(prepare_batch, chunk, from_date, to_date): chunk
                     for chunk in chunks
                 }
-                
+
                 for future in as_completed(futures):
                     count, ctx = future.result()
                     if count > 0:
@@ -183,9 +194,9 @@ class Command(BaseCommand):
 
             print()  # Newline after progress dots
             logger.info(f"{total_count} CVEs ingested.")
-            
+
             logger.info("Updating search vectors in bulk...")
             update_search_vectors()
-            
+
             logger.info(f"Saving the ingestion valid up to {v_date}")
             CveIngestion.objects.create(valid_to=v_date, delta=False)
