@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Sequence
 from typing import Any
 
 import requests
@@ -91,7 +91,7 @@ def fetch_from_monitoring() -> dict[str, MonitoredChannel]:
 
 
 async def wait_for_parallel_fetches(
-    parallel_fetches: list[Coroutine[Any, Any, bool]],
+    parallel_fetches: Sequence[Coroutine[Any, Any, bool]],
 ) -> list[Any]:
     return await asyncio.gather(*parallel_fetches, return_exceptions=True)
 

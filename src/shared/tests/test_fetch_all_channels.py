@@ -36,7 +36,11 @@ def test_report_failed_fetch_shows_error_and_reason() -> None:
 
 
 def test_report_none_release_version_falls_back_to_unstable_label() -> None:
-    unstable_info = {**STABLE_BRANCH_INFO, "channel_branch": "nixos-unstable", "release_version": None}
+    unstable_info = {
+        **STABLE_BRANCH_INFO,
+        "channel_branch": "nixos-unstable",
+        "release_version": None,
+    }
     assert "unstable" in format_channel_report(unstable_info, False)
 
 
@@ -48,16 +52,28 @@ def test_command_upserts_channels_and_reports_fetch_results(
     mock_fetch_monitoring: MagicMock,
 ) -> None:
     mock_fetch_monitoring.return_value = {
-        "nixos-24.11": MonitoredChannel(name="nixos-24.11", revision="1234567890abcdef", status="stable"),
-        "nixos-unstable": MonitoredChannel(name="nixos-unstable", revision="aabbcc0011223344", status="rolling"),
+        "nixos-24.11": MonitoredChannel(
+            name="nixos-24.11", revision="1234567890abcdef", status="stable"
+        ),
+        "nixos-unstable": MonitoredChannel(
+            name="nixos-unstable", revision="aabbcc0011223344", status="rolling"
+        ),
     }
-    mock_git_repo_class.return_value.update_from_ref = AsyncMock(side_effect=[True, False])
+    mock_git_repo_class.return_value.update_from_ref = AsyncMock(
+        side_effect=[True, False]
+    )
 
     out = io.StringIO()
     call_command("fetch_all_channels", stdout=out)
 
-    assert NixChannel.objects.get(channel_branch="nixos-24.11").state == NixChannel.ChannelState.STABLE
-    assert NixChannel.objects.get(channel_branch="nixos-unstable").state == NixChannel.ChannelState.UNSTABLE
+    assert (
+        NixChannel.objects.get(channel_branch="nixos-24.11").state
+        == NixChannel.ChannelState.STABLE
+    )
+    assert (
+        NixChannel.objects.get(channel_branch="nixos-unstable").state
+        == NixChannel.ChannelState.UNSTABLE
+    )
 
     output = out.getvalue()
     assert "nixos-24.11" in output and "fetched" in output
