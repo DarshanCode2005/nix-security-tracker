@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from collections.abc import Coroutine, Sequence
+from pprint import pformat
 from typing import Any
 
 import requests
@@ -90,66 +90,34 @@ def fetch_from_monitoring() -> dict[str, MonitoredChannel]:
     return aggregate_by_channels(resp.json()["data"]["result"])
 
 
-async def wait_for_parallel_fetches(
-    parallel_fetches: Sequence[Coroutine[Any, Any, bool]],
-) -> list[Any]:
-    return await asyncio.gather(*parallel_fetches, return_exceptions=True)
-
-
-def format_channel_report(
-    branch_info: dict[str, Any], fetch_result: bool | BaseException
-) -> str:
-    channel = branch_info["channel_branch"]
-    sha = branch_info["head_sha1_commit"][:12]
-    state = branch_info["state"]
-    release = branch_info.get("release_version") or "unstable"
-
-    if isinstance(fetch_result, BaseException):
-        status = f"ERROR ({fetch_result})"
-    elif fetch_result:
-        status = "fetched"
-    else:
-        status = "already present"
-
-    return f"[{channel}] release={release} state={state} commit={sha} -> {status}"
-
-
 class Command(BaseCommand):
     help = "Register Nix channels"
 
     def handle(self, *args: Any, **kwargs: Any) -> str | None:
         fresh_channels = fetch_from_monitoring()
 
-        # Step 1: register/update all channels in the DB, collect for reporting.
-        registered: list[tuple[NixChannel, dict[str, Any]]] = []
-        for monitored in fresh_channels.values():
+        registered: list[dict[str, Any]] = []
+        for channel in fresh_channels.values():
             branch_info: dict[str, Any] = {
-                "channel_branch": monitored.name,
-                "staging_branch": staging_from_branch(monitored.name),
-                "state": state_from_status(monitored.status),
-                "head_sha1_commit": monitored.revision,
-                "release_version": release_from_branch(monitored.name),
+                "channel_branch": channel.name,
+                "staging_branch": staging_from_branch(channel.name),
+                "state": state_from_status(channel.status),
+                "head_sha1_commit": channel.revision,
+                "release_version": release_from_branch(channel.name),
             }
-            channel, _ = NixChannel.objects.update_or_create(
-                {
-                    "staging_branch": branch_info["staging_branch"],
-                    "state": branch_info["state"],
-                    "head_sha1_commit": branch_info["head_sha1_commit"],
-                    "release_version": branch_info["release_version"],
-                },
-                channel_branch=monitored.name,
-            )
-            registered.append((channel, branch_info))
+            NixChannel.objects.update_or_create(branch_info, channel_branch=channel.name)
+            registered.append(branch_info)
 
-        # Step 2: fetch all commits in parallel, preserving insertion order so
-        # the results list aligns with `registered` for the zip below.
         repo = GitRepo(
             settings.LOCAL_NIXPKGS_CHECKOUT,
             stderr=sys.stderr.fileno(),
         )
-        coros = [repo.update_from_ref(ch.head_sha1_commit) for ch, _ in registered]
-        results = asyncio.run(wait_for_parallel_fetches(coros))
+        results = asyncio.run(
+            asyncio.gather(
+                *[repo.update_from_ref(info["head_sha1_commit"]) for info in registered],
+                return_exceptions=True,
+            )
+        )
 
-        # Step 3: unified per-channel report (one line per channel).
-        for (_channel, branch_info), result in zip(registered, results):
-            self.stdout.write(format_channel_report(branch_info, result))
+        for branch_info, result in zip(registered, results):
+            self.stdout.write(pformat(branch_info | {"fetched": result}))
