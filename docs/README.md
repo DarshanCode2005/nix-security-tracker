@@ -47,6 +47,25 @@ Ideally we will eventually get rid of the cache, but it requires incremental rew
 
 **Activity log**: Issue status changes and metadata edits are tracked automatically via [`django-pghistory`](https://github.com/AmbitionEng/django-pghistory).
 
+## Diagram to implementation map
+
+Maps each diagram box to its source file.
+
+| Diagram box | Source |
+|-------------|--------|
+| Daphne ASGI Django | [src/project/asgi.py](../src/project/asgi.py) |
+| ingest_delta_cve | [src/shared/management/commands/ingest_delta_cve.py](../src/shared/management/commands/ingest_delta_cve.py) |
+| fetch_all_channels | [src/shared/management/commands/fetch_all_channels.py](../src/shared/management/commands/fetch_all_channels.py) |
+| garbage_collect | [src/shared/management/commands/garbage_collect.py](../src/shared/management/commands/garbage_collect.py) |
+| ContainerChannel matching | [src/shared/listeners/automatic_linkage.py](../src/shared/listeners/automatic_linkage.py) |
+| Proposal cache + notify | [src/shared/listeners/cache_and_notify.py](../src/shared/listeners/cache_and_notify.py) |
+| NixEvaluation evaluator | [src/shared/listeners/nix_evaluation.py](../src/shared/listeners/nix_evaluation.py) |
+
+Related infrastructure and trigger definitions:
+
+- Systemd services and timers: [nix/configuration.nix](../nix/configuration.nix)
+- pgpubsub trigger channels: [src/shared/channels.py](../src/shared/channels.py)
+
 ## Further documentation
 
 - [Design Documents](./design/): Detailed design specifications for individual feature.
