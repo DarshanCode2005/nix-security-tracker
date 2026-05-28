@@ -1,50 +1,84 @@
-flowchart LR
+---
+config:
+  layout: elk
+---
+flowchart TB
     Users[Users]
-
+    
     subgraph web [Web]
+        direction LR
         Nginx[Nginx]
-        DjangoAsgi["Daphne ASGI Django"]
+        DjangoAsgi["Daphne ASGI<br/>Django"]
     end
-
-    subgraph jobs [Scheduled Commands]
-        IngestDelta["ingest_delta_cve (03:00 daily)"]
-        FetchChannels["fetch_all_channels (04:00 daily)"]
-        GarbageCollect["garbage_collect (Fri 20:00)"]
+    
+    subgraph jobs [Scheduled Jobs]
+        direction LR
+        IngestDelta["ingest_delta_cve"]
+        FetchChannels["fetch_all_channels"]
+        GarbageCollect["garbage_collect"]
     end
-
-    subgraph workers [Background Workers]
-        Worker["pgpubsub worker"]
-        Evaluator["pgpubsub evaluator"]
-    end
-
-    subgraph storage [Storage]
-        Postgres[(PostgreSQL)]
-        NixpkgsRepo["local nixpkgs checkout"]
-        CveCache["cve cache"]
-        NixStore["/nix/store"]
-    end
-
+    
     subgraph external [External Services]
+        direction LR
         GitHubApi[GitHub API]
-        GitHubCve["CVEProject/cvelistV5"]
-        GitHubNixpkgs["nixos/nixpkgs"]
-        MonitoringApi["monitoring.nixos.org"]
+        GitHubCve[CVEProject/cvelistV5]
+        GitHubNixpkgs[nixos/nixpkgs]
+        MonitoringApi[monitoring.nixos.org]
     end
-
-    Users --> Nginx --> DjangoAsgi --> Postgres
+    
+    subgraph dataPlane [Data Plane]
+        direction TB
+        Postgres[(PostgreSQL)]
+        
+        subgraph workers [Background Workers]
+            direction TB
+            MatchingListener["ContainerChannel<br/>Matching"]
+            CacheNotifyListener["Proposal Cache<br/>& Notify"]
+            Evaluator["NixEvaluation<br/>Evaluator"]
+        end
+    end
+    
+    CveCache["CVE Cache"]
+    NixpkgsRepo["Local nixpkgs"]
+    
+    Users --> Nginx --> DjangoAsgi
+    DjangoAsgi --> Postgres
     DjangoAsgi --> GitHubApi
-
+    
     IngestDelta --> GitHubCve
     IngestDelta --> CveCache
     IngestDelta --> Postgres
-
+    
     FetchChannels --> MonitoringApi
     FetchChannels --> GitHubNixpkgs
     FetchChannels --> NixpkgsRepo
     FetchChannels --> Postgres
-
-    Postgres <-->|"NOTIFY/LISTEN"| Worker
-    Postgres <-->|"NOTIFY/LISTEN"| Evaluator
-    Evaluator --> NixpkgsRepo
-    Evaluator --> NixStore
+    
     GarbageCollect --> Postgres
+    
+    Postgres <-->|ContainerChannel| MatchingListener
+    Postgres <-->|proposal channel| CacheNotifyListener
+    Postgres <-->|NixEvaluationChannel| Evaluator
+    Evaluator --> NixpkgsRepo
+    
+    classDef webGroup stroke #38bdf8, fill #f0f9ff
+    classDef jobGroup stroke #a3e635, fill #f7fee7
+    classDef externalGroup stroke #f87171, fill #fef2f2
+    classDef dataGroup stroke #2dd4bf, fill #f0fdfa
+    classDef workerGroup stroke #a78bfa, fill #f5f3ff
+    classDef storage stroke #facc15, fill #fefce8
+    
+    class web webGroup
+    class jobs jobGroup
+    class external externalGroup
+    class dataPlane dataGroup
+    class workers workerGroup
+    class Postgres,CveCache,NixpkgsRepo storage
+
+    click DjangoAsgi "../src/project/asgi.py" "Daphne ASGI entrypoint"
+    click IngestDelta "../src/shared/management/commands/ingest_delta_cve.py" "ingest_delta_cve command"
+    click FetchChannels "../src/shared/management/commands/fetch_all_channels.py" "fetch_all_channels command"
+    click GarbageCollect "../src/shared/management/commands/garbage_collect.py" "garbage_collect command"
+    click MatchingListener "../src/shared/listeners/automatic_linkage.py" "ContainerChannel matching listener"
+    click CacheNotifyListener "../src/shared/listeners/cache_and_notify.py" "Proposal cache and notify listener"
+    click Evaluator "../src/shared/listeners/nix_evaluation.py" "NixEvaluation evaluator listener"
