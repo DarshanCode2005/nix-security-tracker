@@ -68,8 +68,8 @@ graph TB
     class PostgreSQL,LocalGitCheckout,NixStore storageClass
     class Storage,Background,ManageCommands,Web subgraphClass
 
-    click FetchAllChannels "../src/shared/management/commands/fetch_all_channels.py" "fetch_all_channels"
-    click IngestCVEs "../src/shared/management/commands/ingest_delta_cve.py" "ingest_delta_cve"
-    click NixEval "../src/shared/listeners/nix_evaluation.py" "Evaluate Nixpkgs"
-    click MatchingListener "../src/shared/listeners/automatic_linkage.py" "CVE matching"
-    click WSGI "../src/project/asgi.py" "Daphne ASGI"
+    FetchAllChannels@{ shape: subproc, label: "fetch_all_channels", href: "../src/shared/management/commands/fetch_all_channels.py" }
+    IngestCVEs@{ shape: subproc, label: "ingest_delta_cve", href: "../src/shared/management/commands/ingest_delta_cve.py" }
+    NixEval@{ shape: subproc, label: "Evaluate Nixpkgs", href: "../src/shared/listeners/nix_evaluation.py" }
+    MatchingListener@{ shape: subproc, label: "CVE matching", href: "../src/shared/listeners/automatic_linkage.py" }
+    WSGI@{ shape: subproc, label: "Daphne ASGI", href: "../src/project/asgi.py" }
