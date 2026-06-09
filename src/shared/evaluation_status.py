@@ -1,7 +1,16 @@
+from dataclasses import dataclass
+
 from django.db.models import F, Q, QuerySet, Window
 from django.db.models.functions import RowNumber
 
-from shared.models.nix_evaluation import NixEvaluation
+from shared.models.nix_evaluation import NixChannel, NixEvaluation
+
+
+@dataclass(frozen=True)
+class ChannelEvaluationStatus:
+    channel: NixChannel
+    latest: NixEvaluation | None
+    latest_successful: NixEvaluation | None
 
 
 def _latest_evaluations_per_channel(
@@ -23,7 +32,9 @@ def _latest_evaluations_per_channel(
     ).filter(row_num=1)
 
 
-def latest_completed_evaluations(channel_filter: Q | None = None) -> QuerySet[NixEvaluation]:
+def latest_completed_evaluations(
+    channel_filter: Q | None = None,
+) -> QuerySet[NixEvaluation]:
     return _latest_evaluations_per_channel(
         channel_filter=channel_filter,
         completed_only=True,
