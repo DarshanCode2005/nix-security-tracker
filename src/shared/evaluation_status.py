@@ -4,8 +4,14 @@ from django.db.models.functions import RowNumber
 from shared.models.nix_evaluation import NixEvaluation
 
 
-def latest_completed_evaluations(channel_filter: Q | None = None) -> QuerySet[NixEvaluation]:
-    qs = NixEvaluation.objects.filter(state=NixEvaluation.EvaluationState.COMPLETED)
+def _latest_evaluations_per_channel(
+    *,
+    channel_filter: Q | None = None,
+    completed_only: bool = False,
+) -> QuerySet[NixEvaluation]:
+    qs = NixEvaluation.objects.all()
+    if completed_only:
+        qs = qs.filter(state=NixEvaluation.EvaluationState.COMPLETED)
     if channel_filter is not None:
         qs = qs.filter(channel_filter)
     return qs.annotate(
@@ -15,3 +21,10 @@ def latest_completed_evaluations(channel_filter: Q | None = None) -> QuerySet[Ni
             order_by=F("updated_at").desc(),
         ),
     ).filter(row_num=1)
+
+
+def latest_completed_evaluations(channel_filter: Q | None = None) -> QuerySet[NixEvaluation]:
+    return _latest_evaluations_per_channel(
+        channel_filter=channel_filter,
+        completed_only=True,
+    )
