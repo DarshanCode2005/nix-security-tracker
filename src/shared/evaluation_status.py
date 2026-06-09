@@ -58,3 +58,28 @@ def latest_completed_evaluations(
         channel_filter=channel_filter,
         completed_only=True,
     )
+
+
+def get_channel_evaluation_statuses(
+    channels: QuerySet[NixChannel] | None = None,
+) -> list[ChannelEvaluationStatus]:
+    if channels is None:
+        channels = NixChannel.objects.order_by("channel_branch")
+
+    latest_by_channel = {
+        evaluation.channel_id: evaluation
+        for evaluation in _latest_evaluations_per_channel()
+    }
+    latest_successful_by_channel = {
+        evaluation.channel_id: evaluation
+        for evaluation in _latest_evaluations_per_channel(completed_only=True)
+    }
+
+    return [
+        ChannelEvaluationStatus(
+            channel=channel,
+            latest=latest_by_channel.get(channel.pk),
+            latest_successful=latest_successful_by_channel.get(channel.pk),
+        )
+        for channel in channels
+    ]
