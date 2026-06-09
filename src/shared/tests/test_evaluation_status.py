@@ -1,7 +1,10 @@
 from collections.abc import Callable
 from datetime import timedelta
 
-from shared.evaluation_status import ChannelEvaluationStatus, get_channel_evaluation_statuses
+from shared.evaluation_status import (
+    ChannelEvaluationStatus,
+    get_channel_evaluation_statuses,
+)
 from shared.models.nix_evaluation import NixChannel, NixEvaluation
 
 
