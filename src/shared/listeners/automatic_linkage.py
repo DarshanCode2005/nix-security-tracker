@@ -21,14 +21,13 @@ from django.db.models import (
     Q,
     Value,
     When,
-    Window,
 )
-from django.db.models.functions import RowNumber
 
 from shared.channels import ContainerChannel
+from shared.evaluation_status import latest_completed_evaluations
 from shared.models.cve import Container, Cpe
 from shared.models.linkage import CVEDerivationClusterProposal, ProvenanceFlags
-from shared.models.nix_evaluation import MAJOR_CHANNELS, NixDerivation, NixEvaluation
+from shared.models.nix_evaluation import MAJOR_CHANNELS, NixDerivation
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +41,7 @@ def produce_linkage_candidates(
     for ch in MAJOR_CHANNELS:
         active_channels_q |= Q(channel__channel_branch__contains=ch)
 
-    latest_complete_channels = (
-        NixEvaluation.objects.filter(
-            active_channels_q,
-            state=NixEvaluation.EvaluationState.COMPLETED,
-        )
-        .annotate(
-            row_num=Window(
-                expression=RowNumber(),
-                partition_by=[F("channel")],
-                order_by=F("updated_at").desc(),
-            ),
-        )
-        .filter(row_num=1)
-    )
+    latest_complete_channels = latest_completed_evaluations(active_channels_q)
 
     package_names = (
         filtered_affected.exclude(package_name__isnull=True)
