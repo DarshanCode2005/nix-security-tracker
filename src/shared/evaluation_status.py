@@ -12,6 +12,25 @@ class ChannelEvaluationStatus:
     latest: NixEvaluation | None
     latest_successful: NixEvaluation | None
 
+    @property
+    def is_healthy(self) -> bool:
+        if self.latest is None:
+            return False
+
+        if self.latest.commit_sha1 != self.channel.head_sha1_commit:
+            return False
+
+        if self.latest.state == NixEvaluation.EvaluationState.COMPLETED:
+            return True
+
+        if self.latest.state in (
+            NixEvaluation.EvaluationState.WAITING,
+            NixEvaluation.EvaluationState.IN_PROGRESS,
+        ):
+            return True
+
+        return False
+
 
 def _latest_evaluations_per_channel(
     *,
