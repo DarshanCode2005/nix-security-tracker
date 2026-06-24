@@ -57,6 +57,6 @@ Moreover, a [Postgres Exporter](https://github.com/prometheus-community/postgres
 
 Metrics are scraped hourly from the tracker database and exposed as `sql_<name>` in Prometheus.
 
-| Metric | Definition |
-|--------|------------|
+| Metric                 | Definition                                                                                                                                                                                                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `false_positive_ratio` | Proposal rejection rate among triaged suggestions: `rejected / (accepted + rejected)`, where `published` proposals count as accepted. Pending proposals are excluded. Value is 0-1 (display as a percentage in Grafana). Auto-rejections (E.g. hardware-only CPE) are included in the rejected count. |
