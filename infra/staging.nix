@@ -48,6 +48,7 @@ in
   users.users.root.openssh.authorizedKeys.keyFiles = with config.custom.keys; [
     florentc
     adekoder
+    DarshanCode2005
   ];
 
   nixpkgs.overlays = sectracker.overlays;
