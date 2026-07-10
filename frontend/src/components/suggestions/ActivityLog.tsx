@@ -48,7 +48,7 @@ function entryIcon(entry: ActivityLogEntry) {
   const sv = entry.status_value ?? "";
   const statusValues = Object.values(StatusEnum) as readonly StatusEnum[];
   if (statusValues.includes(sv as StatusEnum)) {
-    <SuggestionStatusIcon status={sv as StatusEnum} size="1em" />;
+    return <SuggestionStatusIcon status={sv as StatusEnum} size="1em" />;
   }
   return null;
 }
