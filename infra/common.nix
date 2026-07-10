@@ -88,7 +88,17 @@ in
   services.prometheus.exporters.node = {
     enable = true;
     openFirewall = true;
+    enabledCollectors = [ "textfile" ];
+    extraFlags = [
+      "--collector.textfile.directory=${config.services.nix-security-tracker.settings.METRICS_TEXTFILE_DIR}"
+    ];
   };
+
+  services.nix-security-tracker.settings.METRICS_TEXTFILE_DIR = "/var/lib/nix-security-tracker/metrics";
+
+  systemd.tmpfiles.rules = [
+    "d ${config.services.nix-security-tracker.settings.METRICS_TEXTFILE_DIR} 2750 nix-security-tracker ${config.services.prometheus.exporters.node.user} -"
+  ];
 
   services.prometheus.exporters.postgres = {
     enable = true;

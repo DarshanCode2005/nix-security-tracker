@@ -120,6 +120,7 @@ rec {
               };
             in
             if git ? dirtyRev then "${git.shortRev}-dirty" else git.shortRev;
+          METRICS_TEXTFILE_DIR = toString ./. + "/prometheus-metrics";
         };
       };
 
@@ -164,6 +165,7 @@ rec {
         ln -sf ${sources.nixos-logo} src/webview/static/nixos-logo.svg
 
         mkdir -p $CREDENTIALS_DIRECTORY
+        mkdir -p ${toString ./.}/prometheus-metrics
         # TODO(@fricklerhandwerk): move all configuration over to pydantic-settings
         touch .settings.py
         export USER_SETTINGS_FILE=${builtins.toString ./.settings.py}

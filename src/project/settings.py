@@ -100,6 +100,12 @@ class Settings(BaseSettings):
             By default, in the root of this Git repository.
             """
         )
+        METRICS_TEXTFILE_DIR: DirectoryPath | None = Field(
+            description="""
+            Directory for Prometheus textfile metrics consumed by node_exporter.
+            """,
+            default=None,
+        )
         CHANNEL_MONITORING_URL: HttpUrl = Field(
             description="""
             URL from which to fetch the current channel structure.

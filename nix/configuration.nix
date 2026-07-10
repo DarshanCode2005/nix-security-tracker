@@ -348,7 +348,11 @@ in
           ];
           wantedBy = [ "multi-user.target" ];
 
-          serviceConfig.Type = "oneshot";
+          serviceConfig = {
+            Type = "oneshot";
+            # Make performance metrics file, produced as a side effect, readable by Prometheus node exporter
+            UMask = "0027";
+          };
           script = ''
             wst-manage backfill_package_clustering
             wst-manage regenerate_cached_suggestions
