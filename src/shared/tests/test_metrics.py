@@ -145,13 +145,17 @@ def test_write_metrics_textfile_writes_cve_delta_ingest_metrics(
 def test_observe_matching_records_histogram_samples() -> None:
     from prometheus_client import REGISTRY
 
-    before = REGISTRY.get_sample_value(
-        "sectracker_matching_duration_seconds_count"
-    ) or 0.0
+    before = (
+        REGISTRY.get_sample_value("sectracker_matching_duration_seconds_count") or 0.0
+    )
     observe_matching(0.12, 7)
-    after = REGISTRY.get_sample_value("sectracker_matching_duration_seconds_count") or 0.0
+    after = (
+        REGISTRY.get_sample_value("sectracker_matching_duration_seconds_count") or 0.0
+    )
     assert after == before + 1.0
-    candidates = REGISTRY.get_sample_value("sectracker_matching_candidates_count") or 0.0
+    candidates = (
+        REGISTRY.get_sample_value("sectracker_matching_candidates_count") or 0.0
+    )
     assert candidates >= 1.0
 
 
