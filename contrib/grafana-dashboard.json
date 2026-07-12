@@ -1292,13 +1292,13 @@
     "list": [
       {
         "current": {},
-        "definition": "label_values(sql_delta,instance)",
+        "definition": "label_values(up, instance)",
         "label": "Instance",
         "name": "Instance",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(sql_delta,instance)",
+          "query": "label_values(up, instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
