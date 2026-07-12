@@ -181,9 +181,27 @@ in
       type = types.int;
       default = 2;
     };
+    metricsWorkerPort = mkOption {
+      description = ''
+        TCP port for the main listen worker Prometheus /metrics endpoint (matching).
+      '';
+      type = types.port;
+      default = 9252;
+    };
+    metricsEvaluatorPort = mkOption {
+      description = ''
+        TCP port for the evaluator multiprocess Prometheus /metrics sidecar.
+      '';
+      type = types.port;
+      default = 9253;
+    };
   };
 
   config = mkIf cfg.enable {
+    networking.firewall.allowedTCPPorts = [
+      cfg.metricsWorkerPort
+      cfg.metricsEvaluatorPort
+    ];
     environment.systemPackages = [ wstExternalManageScript ];
     services = {
       # TODO(@fricklerhandwerk): move all configuration over to pydantic-settings
@@ -332,7 +350,14 @@ in
           ];
           wantedBy = [ "multi-user.target" ];
 
+          environment = {
+            PROMETHEUS_MULTIPROC_DIR = "/var/lib/nix-security-tracker/prometheus-multiproc";
+          };
+
           script = ''
+            mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
+            # prometheus_client multiprocess mode requires an empty directory at start.
+            find "$PROMETHEUS_MULTIPROC_DIR" -mindepth 1 -delete
             # Before starting, crash all the in-progress evaluations.
             # This will prevent them from being stalled forever, since workers would not pick up evaluations marked as in-progress.
             wst-manage crash_all_evaluations
@@ -340,6 +365,31 @@ in
               --processes ${toString cfg.maxJobProcessors} \
               --channels \
                 shared.channels.NixEvaluationChannel
+          '';
+        };
+
+        nix-security-tracker-evaluator-metrics = {
+          description = "Web security tracker - evaluator Prometheus metrics sidecar";
+          after = [
+            "network.target"
+            "nix-security-tracker-evaluator.service"
+          ];
+          requires = [ "nix-security-tracker-evaluator.service" ];
+          wantedBy = [ "multi-user.target" ];
+
+          environment = {
+            PROMETHEUS_MULTIPROC_DIR = "/var/lib/nix-security-tracker/prometheus-multiproc";
+            DJANGO_SETTINGS = builtins.toJSON (
+              cfg.settings
+              // {
+                METRICS_HTTP_PORT = cfg.metricsEvaluatorPort;
+              }
+            );
+          };
+
+          script = ''
+            mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
+            wst-manage serve_worker_metrics
           '';
         };
 
@@ -379,6 +429,13 @@ in
             "nix-security-tracker-migrations.service"
           ];
           wantedBy = [ "multi-user.target" ];
+
+          environment.DJANGO_SETTINGS = builtins.toJSON (
+            cfg.settings
+            // {
+              METRICS_HTTP_PORT = cfg.metricsWorkerPort;
+            }
+          );
 
           script = ''
             wst-manage listen --recover \
