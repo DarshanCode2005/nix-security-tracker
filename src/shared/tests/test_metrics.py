@@ -3,7 +3,12 @@ from pathlib import Path
 from django.test import override_settings
 from prometheus_client import CollectorRegistry, Gauge
 
-from shared.metrics import write_metrics_textfile
+from shared.metrics import (
+    observe_eval_batch_ingest,
+    observe_matching,
+    start_worker_metrics_server,
+    write_metrics_textfile,
+)
 
 
 def test_write_metrics_textfile_produces_prometheus_format(tmp_path: Path) -> None:
@@ -135,3 +140,41 @@ def test_write_metrics_textfile_writes_cve_delta_ingest_metrics(
     assert "sectracker_cve_delta_ingest_duration_seconds 8.25" in content
     assert "sectracker_cve_delta_ingest_cves 15.0" in content
     assert "sectracker_cve_delta_ingest_days 2.0" in content
+
+
+def test_observe_matching_records_histogram_samples() -> None:
+    from prometheus_client import REGISTRY
+
+    before = REGISTRY.get_sample_value(
+        "sectracker_matching_duration_seconds_count"
+    ) or 0.0
+    observe_matching(0.12, 7)
+    after = REGISTRY.get_sample_value("sectracker_matching_duration_seconds_count") or 0.0
+    assert after == before + 1.0
+    candidates = REGISTRY.get_sample_value("sectracker_matching_candidates_count") or 0.0
+    assert candidates >= 1.0
+
+
+def test_observe_eval_batch_ingest_records_histogram_samples() -> None:
+    from prometheus_client import REGISTRY
+
+    before = (
+        REGISTRY.get_sample_value(
+            "sectracker_nix_evaluation_batch_ingest_duration_seconds_count"
+        )
+        or 0.0
+    )
+    observe_eval_batch_ingest(0.45, 12)
+    after = (
+        REGISTRY.get_sample_value(
+            "sectracker_nix_evaluation_batch_ingest_duration_seconds_count"
+        )
+        or 0.0
+    )
+    assert after == before + 1.0
+
+
+def test_start_worker_metrics_server_noop_without_port() -> None:
+    with override_settings(METRICS_HTTP_PORT=None):
+        # Must not raise when port is unset.
+        start_worker_metrics_server()
