@@ -30,6 +30,15 @@ in
 
         doCheck = false;
       };
+      cpe = pyfinal.buildPythonPackage {
+        pname = "cpe";
+        version = "1.3.1";
+        pyproject = true;
+        build-system = [
+          pyfinal.setuptools
+        ];
+        src = sources.cpe;
+      };
     };
   };
   # go through the motions to make a flake-incompat project use the build
@@ -82,6 +91,7 @@ in
       pytest-playwright
       pytest-mock
       cvss
+      cpe
       freezegun
       django-model-utils
       drf-spectacular
