@@ -1,6 +1,7 @@
 # CVE records
 
-The tracker ingests [CVE JSON 5.0](https://github.com/CVEProject/cve-schema) records from the [official CVE List](https://github.com/CVEProject/cvelistV5) and stores them in PostgreSQL. The schema follows the upstream format; see the [CVE record content rules](https://www.cve.org/ResourcesSupport/AllResources/CNARules#section_5_CVE_Record_Content) and the [schema reference](https://cveproject.github.io/cve-schema/schema/docs/) for field definitions.
+The tracker parses [CVE JSON 5.0](https://github.com/CVEProject/cve-schema) records from the [official CVE List](https://github.com/CVEProject/cvelistV5) and stores them in the database.
+The schema follows the upstream format; see the [CVE record content rules](https://www.cve.org/ResourcesSupport/AllResources/CNARules#section_5_CVE_Record_Content) and the [schema reference](https://cveproject.github.io/cve-schema/schema/docs/) for field definitions.
 
 Implementation: [`src/shared/models/cve.py`](../src/shared/models/cve.py).
 
