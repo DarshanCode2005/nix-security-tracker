@@ -14,7 +14,6 @@ Implementation: [`src/shared/models/cve.py`](../src/shared/models/cve.py).
 | `assigner` / `requester` | CNA organizations that assigned or requested the ID |
 | `date_published`, `date_updated`, `date_reserved` | Timestamps from the CVE Program |
 | `serial` | Record revision number |
-| `triaged` | Internal flag: a security team member has reviewed this CVE |
 
 Each CVE has one or more **containers** (`Container`), holding the actual vulnerability data.
 
