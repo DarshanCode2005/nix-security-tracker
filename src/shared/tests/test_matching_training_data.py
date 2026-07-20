@@ -48,9 +48,7 @@ def test_schema_dict_roundtrip_preserves_fields() -> None:
         labels=Labels(
             status="accepted",
             rejection_reason=None,
-            kept_derivations=(
-                DerivationFingerprint("foo", "foo-1.0", "x86_64-linux"),
-            ),
+            kept_derivations=(DerivationFingerprint("foo", "foo-1.0", "x86_64-linux"),),
             ignored_packages=("foo.tests",),
             package_overlays=(
                 PackageOverlayData("foo.tests", PackageOverlay.Type.IGNORED),
@@ -211,7 +209,9 @@ def test_export_import_auto_reject_without_links(
     reexported = export_proposal(imported)
     assert reexported.normalized() == original.normalized()
 
-    outcome = resolve_linkage_candidates(imported.cve.container.first())
+    imported_container = imported.cve.container.first()
+    assert imported_container is not None
+    outcome = resolve_linkage_candidates(imported_container)
     assert outcome.rejection is not None
     assert (
         outcome.rejection.reason

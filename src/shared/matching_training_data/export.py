@@ -103,9 +103,7 @@ def _kept_derivations(
         return ()
     return tuple(
         sorted(
-            d.fingerprint
-            for d in derivations
-            if d.attribute not in ignored_packages
+            d.fingerprint for d in derivations if d.attribute not in ignored_packages
         )
     )
 

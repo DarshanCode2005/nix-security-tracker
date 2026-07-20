@@ -228,9 +228,7 @@ def record_from_dict(data: dict[str, Any]) -> TrainingRecord:
             ),
             comment=labels_raw.get("comment"),
             rejection_match_count=labels_raw.get("rejection_match_count"),
-            rejection_max_matches_limit=labels_raw.get(
-                "rejection_max_matches_limit"
-            ),
+            rejection_max_matches_limit=labels_raw.get("rejection_max_matches_limit"),
         ),
         derivations=tuple(
             DerivationData(
