@@ -5,7 +5,11 @@ from django.contrib.auth.models import User
 from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
-from shared.matching_training_data import SCHEMA_VERSION, export_proposal, record_to_dict
+from shared.matching_training_data import (
+    SCHEMA_VERSION,
+    export_proposal,
+    record_to_dict,
+)
 from shared.models.cve import Container
 from shared.models.linkage import (
     CVEDerivationClusterProposal,

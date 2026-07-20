@@ -4,6 +4,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.matching.serializers import MatchingTrainingRecordSerializer
@@ -33,7 +34,7 @@ class MatchingTrainingDataView(ListAPIView):
     pagination_class = MatchingTrainingDataPagination
     serializer_class = MatchingTrainingRecordSerializer
 
-    def get_queryset(self) -> QuerySet[CVEDerivationClusterProposal]:
+    def get_queryset(self) -> QuerySet[CVEDerivationClusterProposal]:  # pyright: ignore[reportIncompatibleMethodOverride]
         return user_curated_proposals()
 
     @extend_schema(
@@ -49,5 +50,5 @@ class MatchingTrainingDataView(ListAPIView):
             403: ErrorDetailSerializer,
         },
     )
-    def get(self, request: Request, *args: object, **kwargs: object):
+    def get(self, request: Request, *args: object, **kwargs: object) -> Response:
         return super().get(request, *args, **kwargs)
