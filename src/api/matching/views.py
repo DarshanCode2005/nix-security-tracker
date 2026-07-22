@@ -9,16 +9,15 @@ from rest_framework.views import APIView
 
 from api.matching.serializers import MatchingTrainingRecordSerializer
 from api.serializers import ErrorDetailSerializer
-from shared.auth import isadmin
+from shared.auth import can_access_matching_training_data
 from shared.matching_training_data import user_curated_proposals
 from shared.models.linkage import CVEDerivationClusterProposal
 
 
-class IsAdmin(BasePermission):
-    """Staff or security-team members (see shared.auth.isadmin)."""
+class CanAccessMatchingTrainingData(BasePermission):
 
     def has_permission(self, request: Request, view: APIView) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
-        return bool(request.user and isadmin(request.user))
+        return bool(request.user and can_access_matching_training_data(request.user))
 
 
 class MatchingTrainingDataPagination(PageNumberPagination):
@@ -30,7 +29,7 @@ class MatchingTrainingDataPagination(PageNumberPagination):
 class MatchingTrainingDataView(ListAPIView):
     """Read-only export of user-curated matching proposals for offline training."""
 
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, CanAccessMatchingTrainingData]
     pagination_class = MatchingTrainingDataPagination
     serializer_class = MatchingTrainingRecordSerializer
 
@@ -42,7 +41,8 @@ class MatchingTrainingDataView(ListAPIView):
         description=(
             "Export user-curated CVE-derivation proposals "
             "(status != pending, including auto-rejects) as versioned training-data "
-            "records. Requires admin privileges (staff or security team)."
+            "records. Restricted to the matching_training_data group (manually "
+            "assigned) as a stopgap for server load until rate limiting exists."
         ),
         responses={
             200: MatchingTrainingRecordSerializer,
