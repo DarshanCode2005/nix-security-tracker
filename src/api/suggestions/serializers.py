@@ -13,6 +13,41 @@ from shared.logs.batches import (
 from shared.models.linkage import CVEDerivationClusterProposal
 
 
+class SuggestionReferenceUpdateSerializer(serializers.Serializer):
+    """Request body for ignore/restore reference PATCH operations."""
+
+    reference_url = serializers.URLField(
+        max_length=2048,
+        help_text="URL of the reference to ignore or restore.",
+    )
+    ignored = serializers.BooleanField(
+        help_text="Set to true to ignore the reference, false to restore it.",
+    )
+
+
+class SuggestionMaintainerUpdateSerializer(serializers.Serializer):
+    """Request body for ignore/restore maintainer PATCH operations."""
+
+    github_id = serializers.IntegerField(
+        help_text="GitHub ID of the maintainer to ignore or restore.",
+    )
+    ignored = serializers.BooleanField(
+        help_text="Set to true to ignore the maintainer, false to restore it.",
+    )
+
+
+class SuggestionCommentSerializer(serializers.Serializer):
+    """Serializer for reading or updating a suggestion comment."""
+
+    comment = serializers.CharField(
+        allow_null=True,
+        allow_blank=True,
+        required=True,
+        max_length=1000,
+        help_text="Free-text comment. Set to empty string to clear.",
+    )
+
+
 class MetricHumanReadableItemSerializer(serializers.Serializer):
     label = serializers.CharField()
     value = serializers.CharField()
