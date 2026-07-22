@@ -21,7 +21,7 @@ urlpatterns = [
     path("v1/server-info", ServerInfoView.as_view(), name="server-info"),
     path("v1/tokens/me", TokenManagementView.as_view(), name="token-management"),
     path(
-        "v1/matching/training-data",
+        "v1/matching-training-data",
         MatchingTrainingDataView.as_view(),
         name="matching-training-data",
     ),
