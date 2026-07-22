@@ -5,7 +5,8 @@ The schema follows the upstream format; see the [CVE record content rules](https
 
 Implementation: [`src/shared/models/cve.py`](../src/shared/models/cve.py).
 
-A `CveRecord` has one or more `Container`s (CNA or ADP). Matching mainly uses each container's `AffectedProduct` entries: vendor/product names, package names, CPE strings, and version constraints.
+A `CveRecord` has one or more `Container`s (CNA or ADP).
+Matching mainly uses each container's `AffectedProduct` entries: vendor/product names, package names, CPE strings, and version constraints.
 
 ## Why matching needs manual triage
 
