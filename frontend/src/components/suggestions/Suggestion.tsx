@@ -1,5 +1,6 @@
 import { Link } from "wouter-preact";
 import type { Suggestion as SuggestionType } from "@/api/generated/models";
+import { useAuth } from "@/hooks/useAuth";
 import { ActivityLog } from "./ActivityLog";
 import { AffectedProductsList } from "./AffectedProductsList";
 import { CategorizedMaintainersList } from "./CategorizedMaintainersList";
@@ -30,10 +31,13 @@ export function Suggestion({ suggestion }: Props) {
     categorized_url_references,
   } = suggestion;
 
+  const { user } = useAuth();
+  const userCanEdit = Boolean(user?.is_committer || user?.is_admin);
+
   const nvdUrl = `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cve_id)}`;
 
   return (
-    <article className="box shadow border rounded column gap-big">
+    <article className="box shadow border rounded column gap-big" data-testid={`suggestion-${id}`}>
       {/* Status + CVE ID + title */}
       <div className="column gap">
         <SuggestionStatus status={status} rejectionReason={rejection_reason} />
@@ -58,10 +62,14 @@ export function Suggestion({ suggestion }: Props) {
       </div>
 
       {/* References */}
-      {categorized_url_references.active.length > 0 && (
+      {categorized_url_references.original.length > 0 && (
         <div className="rounded border box column gap">
           <h2 className="text-l bold text-gray">References</h2>
-          <CategorizedReferencesList categorizedReferences={categorized_url_references} />
+          <CategorizedReferencesList
+            categorizedReferences={categorized_url_references}
+            suggestionId={id}
+            editable={userCanEdit && (status === "pending" || status === "accepted")}
+          />
         </div>
       )}
 
@@ -76,19 +84,25 @@ export function Suggestion({ suggestion }: Props) {
       {/* Packages */}
       <div className="rounded border box column gap">
         <h2 className="text-l bold text-gray">Matching in nixpkgs</h2>
-        <CategorizedPackagesList active={packages} ignored={ignored_packages} />
+        <CategorizedPackagesList suggestionId={id} active={packages} ignored={ignored_packages} />
       </div>
 
       {/* Maintainers */}
-      {categorized_maintainers.active.length > 0 && (
+      {categorized_maintainers.original.length > 0 && (
         <div className="rounded border box column gap">
           <h2 className="text-l bold text-gray">Maintainers</h2>
-          <CategorizedMaintainersList categorizedMaintainers={categorized_maintainers} />
+          <CategorizedMaintainersList
+            suggestionId={id}
+            categorizedMaintainers={categorized_maintainers}
+            editable={userCanEdit && (status === "pending" || status === "accepted")}
+          />
         </div>
       )}
 
       {/* Comment */}
-      {comment && comment.length > 0 && <Comment comment={comment} />}
+      {(comment || userCanEdit) && (
+        <Comment suggestionId={id} comment={comment ?? null} canEdit={userCanEdit} />
+      )}
     </article>
   );
 }

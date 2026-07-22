@@ -4,7 +4,7 @@ from typing import Any
 import pghistory
 import pgtrigger
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.db.models.signals import post_delete, post_save
 from django.db.utils import InternalError
@@ -16,6 +16,21 @@ import shared.models.cached
 from shared.models.cve import CveRecord, Reference
 from shared.models.nix_evaluation import NixDerivation, NixMaintainer, TimeStampMixin
 from shared.models.package import Package
+
+
+class Overlay(models.Model):
+    """
+    This is the base model for all Overlay models should inherit from this.
+    """
+
+    class Type(models.TextChoices):
+        ADDITIONAL = "additional", _("additional")
+        IGNORED = "ignored", _("ignored")
+
+    type = models.CharField(max_length=126, choices=Type.choices)
+
+    class Meta:
+        abstract = True
 
 
 class SuggestionStatus(models.TextChoices):
@@ -170,17 +185,134 @@ class CVEDerivationClusterProposal(TimeStampMixin):
     def ignore_package(self, package: str) -> None:
         edit, created = self.package_overlays.get_or_create(
             package_attribute=package,
-            defaults={"overlay_type": PackageOverlay.Type.IGNORED},
+            defaults={"type": PackageOverlay.Type.IGNORED},
         )
-        if not created and edit.overlay_type != PackageOverlay.Type.IGNORED:
-            edit.overlay_type = PackageOverlay.Type.IGNORED
+        if not created and edit.type != PackageOverlay.Type.IGNORED:
+            edit.type = PackageOverlay.Type.IGNORED
             edit.save()
 
     def restore_package(self, package: str) -> None:
         self.package_overlays.filter(
             package_attribute=package,
-            overlay_type=PackageOverlay.Type.IGNORED,
+            type=PackageOverlay.Type.IGNORED,
         ).delete()
+
+    def ignore_reference(self, reference_url: str) -> None:
+        """Ignore a URL reference, updating the overlay and the cache."""
+        cat_refs = self.cached.payload["categorized_url_references"]
+        ref = next((r for r in cat_refs["original"] if r["url"] == reference_url), None)
+        if ref is None:
+            raise ValidationError(
+                {"reference_url": "Reference not found in the suggestion"}
+            )
+        if self.reference_url_overlays.filter(
+            reference_url=reference_url, type=ReferenceUrlOverlay.Type.IGNORED
+        ).exists():
+            raise ValidationError({"reference_url": "Reference is already ignored"})
+
+        with transaction.atomic():
+            self.reference_url_overlays.get_or_create(
+                reference_url=reference_url,
+                defaults={
+                    "deduplicated_name": ref["name"],
+                    "type": ReferenceUrlOverlay.Type.IGNORED,
+                },
+            )
+            cat_refs["active"] = [
+                r for r in cat_refs["active"] if r["url"] != reference_url
+            ]
+            cat_refs["ignored"].append(ref)
+            self.cached.save()
+
+    def restore_reference(self, reference_url: str) -> None:
+        """Restore a previously ignored URL reference."""
+        cat_refs = self.cached.payload["categorized_url_references"]
+        ref = next((r for r in cat_refs["ignored"] if r["url"] == reference_url), None)
+        if ref is None:
+            raise ValidationError(
+                {"reference_url": "Reference not found in ignored references"}
+            )
+
+        overlay = self.reference_url_overlays.filter(
+            reference_url=reference_url, type=ReferenceUrlOverlay.Type.IGNORED
+        ).first()
+        if not overlay:
+            raise ValidationError(
+                {"reference_url": "No ignore overlay found for this reference"}
+            )
+
+        with transaction.atomic():
+            overlay.delete()
+            cat_refs["ignored"] = [
+                r for r in cat_refs["ignored"] if r["url"] != reference_url
+            ]
+            cat_refs["active"].append(ref)
+            self.cached.save()
+
+    def ignore_maintainer(self, github_id: int) -> None:
+        """Ignore a maintainer, updating the overlay and the cache."""
+        cat_maintainers = self.cached.payload["categorized_maintainers"]
+        maintainer_data = next(
+            (m for m in cat_maintainers["original"] if m["github_id"] == github_id),
+            None,
+        )
+        if maintainer_data is None:
+            raise ValidationError(
+                {"github_id": "Maintainer not found in original maintainers"}
+            )
+        if self.maintainer_overlays.filter(
+            maintainer__github_id=github_id, type=MaintainerOverlay.Type.IGNORED
+        ).exists():
+            raise ValidationError({"github_id": "Maintainer is already ignored"})
+
+        maintainer = NixMaintainer.objects.get(github_id=github_id)
+
+        with transaction.atomic():
+            edit, created = self.maintainer_overlays.get_or_create(
+                maintainer=maintainer,
+                defaults={"type": MaintainerOverlay.Type.IGNORED},
+            )
+            if not created and edit.type != MaintainerOverlay.Type.IGNORED:
+                edit.type = MaintainerOverlay.Type.IGNORED
+                edit.save()
+            cat_maintainers["active"] = [
+                m for m in cat_maintainers["active"] if m["github_id"] != github_id
+            ]
+            cat_maintainers["ignored"].append(maintainer_data)
+            self.cached.save()
+
+    def restore_maintainer(self, github_id: int) -> None:
+        """Restore a previously ignored maintainer."""
+        cat_maintainers = self.cached.payload["categorized_maintainers"]
+        maintainer_data = next(
+            (m for m in cat_maintainers["ignored"] if m["github_id"] == github_id),
+            None,
+        )
+        if maintainer_data is None:
+            raise ValidationError(
+                {"github_id": "Maintainer not found in ignored maintainers"}
+            )
+
+        overlay = self.maintainer_overlays.filter(
+            maintainer__github_id=github_id, type=MaintainerOverlay.Type.IGNORED
+        ).first()
+        if not overlay:
+            raise ValidationError(
+                {"github_id": "No ignore overlay found for this maintainer"}
+            )
+
+        with transaction.atomic():
+            overlay.delete()
+            cat_maintainers["ignored"] = [
+                m for m in cat_maintainers["ignored"] if m["github_id"] != github_id
+            ]
+            cat_maintainers["active"].append(maintainer_data)
+            self.cached.save()
+
+    def set_comment(self, comment: str | None) -> None:
+        """Update the free-text comment independently of status changes."""
+        self.comment = comment or None
+        self.save(update_fields=["comment"])
 
     def change_status(
         self,
@@ -298,16 +430,11 @@ class CVEDerivationClusterProposal(TimeStampMixin):
     pghistory.ManualEvent("maintainer.restore"),
     pghistory.ManualEvent("maintainer.ignore"),
 )
-class MaintainerOverlay(models.Model):
+class MaintainerOverlay(Overlay):
     """
     An element in the overlay set of maintainers of a suggestion.
     """
 
-    class Type(models.TextChoices):
-        ADDITIONAL = "additional", _("additional")
-        IGNORED = "ignored", _("ignored")
-
-    overlay_type = models.CharField(max_length=126, choices=Type.choices)
     maintainer = models.ForeignKey(NixMaintainer, on_delete=models.PROTECT)
     suggestion = models.ForeignKey(
         CVEDerivationClusterProposal,
@@ -315,7 +442,7 @@ class MaintainerOverlay(models.Model):
         on_delete=models.CASCADE,
     )
 
-    class Meta:  # type: ignore[override]
+    class Meta(Overlay.Meta):
         constraints = [
             # Ensures that a maintainer can only be added or removed once per
             # suggestion.
@@ -330,16 +457,11 @@ class MaintainerOverlay(models.Model):
     pghistory.ManualEvent("package.restore"),
     pghistory.ManualEvent("package.ignore"),
 )
-class PackageOverlay(models.Model):
+class PackageOverlay(Overlay):
     """
     An element in the overlay set of packages of a suggestion.
     """
 
-    class Type(models.TextChoices):
-        IGNORED = "ignored", _("ignored")
-        # ADDITIONAL reserved for future use if needed
-
-    overlay_type = models.CharField(max_length=126, choices=Type.choices)
     package_attribute = models.CharField(max_length=255)
     suggestion = models.ForeignKey(
         CVEDerivationClusterProposal,
@@ -347,7 +469,7 @@ class PackageOverlay(models.Model):
         on_delete=models.CASCADE,
     )
 
-    class Meta:
+    class Meta(Overlay.Meta):
         constraints = [
             models.UniqueConstraint(
                 fields=["suggestion", "package_attribute"],
@@ -360,17 +482,12 @@ class PackageOverlay(models.Model):
     pghistory.ManualEvent("reference.restore"),
     pghistory.ManualEvent("reference.ignore"),
 )
-class ReferenceUrlOverlay(models.Model):
+class ReferenceUrlOverlay(Overlay):
     """
     A single manual overlay of the list of references of a suggestion.
     These overlays are per url, so one overlay may apply to several references which share the same URL.
     """
 
-    class Type(models.TextChoices):
-        IGNORED = "ignored", _("ignored")
-        # ADDITIONAL reserved for future use if needed
-
-    type = models.CharField(max_length=126, choices=Type.choices)
     reference_url = models.URLField(max_length=2048, blank=True)
     deduplicated_name = models.CharField(
         max_length=512, blank=True
@@ -381,7 +498,7 @@ class ReferenceUrlOverlay(models.Model):
         on_delete=models.CASCADE,
     )
 
-    class Meta:  # type: ignore[override]
+    class Meta(Overlay.Meta):
         constraints = [
             # Ensures that a reference can only be added or removed once per
             # suggestion.
@@ -426,7 +543,7 @@ def track_maintainer_overlay_save(
     if created:
         label = (
             "maintainer.add"
-            if instance.overlay_type == MaintainerOverlay.Type.ADDITIONAL
+            if instance.type == MaintainerOverlay.Type.ADDITIONAL
             else "maintainer.ignore"
         )
         pghistory.create_event(
@@ -441,7 +558,7 @@ def track_maintainer_overlay_delete(
 ) -> None:
     label = (
         "maintainer.delete"
-        if instance.overlay_type == MaintainerOverlay.Type.ADDITIONAL
+        if instance.type == MaintainerOverlay.Type.ADDITIONAL
         else "maintainer.restore"
     )
     pghistory.create_event(

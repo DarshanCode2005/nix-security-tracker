@@ -15,16 +15,14 @@ from django.conf import settings
 from django.db import models, transaction
 from django.db.models import (
     Case,
-    Exists,
     IntegerField,
-    OuterRef,
     Q,
     Value,
     When,
 )
 
 from shared.channels import ContainerChannel
-from shared.models.cve import Container, Cpe
+from shared.models.cve import Container
 from shared.models.linkage import (
     CVEDerivationClusterProposal,
     DerivationClusterProposalLink,
@@ -76,16 +74,15 @@ def resolve_linkage_candidates(container: Container) -> LinkageOutcome:
             ),
         )
 
-    # FIXME(@fricklerhandwerk): This only works because we're validating syntax on ingestion.
-    # Use a proper parsing library such as https://github.com/nilp0inter/cpe to work on structured data.
-    # That particular one looks like the best candidate, but appears unmaintained (or could just be very stable); needs thorough review before adopting it.
-    has_any_cpe = Exists(Cpe.objects.filter(affectedproduct=OuterRef("pk")))
-    has_non_hardware_cpe = Exists(
-        Cpe.objects.filter(affectedproduct=OuterRef("pk")).exclude(
-            name__istartswith="cpe:2.3:h:"
-        )
-    )
-    filtered_affected = container.affected.exclude(has_any_cpe & ~has_non_hardware_cpe)
+    affected_products = container.affected.prefetch_related("cpes")
+    excluded = [
+        affected.pk
+        for affected in affected_products
+        if (cpes := affected.cpes.all())
+        and all(cpe.parsed.is_hardware() for cpe in cpes)
+    ]
+
+    filtered_affected = container.affected.exclude(pk__in=excluded)
 
     if container.affected.exists() and not filtered_affected.exists():
         logger.info(
@@ -268,34 +265,35 @@ def build_new_links(container: Container) -> bool:
 
     outcome = resolve_linkage_candidates(container)
 
-    proposal = CVEDerivationClusterProposal.objects.create(
-        cve=container.cve,
-        status=(
-            CVEDerivationClusterProposal.Status.REJECTED
+    with transaction.atomic():
+        proposal = CVEDerivationClusterProposal.objects.create(
+            cve=container.cve,
+            status=(
+                CVEDerivationClusterProposal.Status.REJECTED
+                if outcome.rejection
+                else CVEDerivationClusterProposal.Status.PENDING
+            ),
+            rejection_reason=outcome.rejection.reason if outcome.rejection else None,
+            rejection_match_count=outcome.rejection.match_count or None
             if outcome.rejection
-            else CVEDerivationClusterProposal.Status.PENDING
-        ),
-        rejection_reason=outcome.rejection.reason if outcome.rejection else None,
-        rejection_match_count=outcome.rejection.match_count or None
-        if outcome.rejection
-        else None,
-        rejection_max_matches_limit=outcome.rejection.max_matches_limit or None
-        if outcome.rejection
-        else None,
-        algorithm_version=CVEDerivationClusterProposal.CURRENT_ALGORITHM_VERSION,
-    )
-
-    if outcome.derivations:
-        links = build_derivation_links(proposal, outcome.derivations)
-        DerivationClusterProposalLink.objects.bulk_create(links)
-        pkg_links = build_package_links(proposal, outcome.derivations)
-        PackageClusterProposalLink.objects.bulk_create(pkg_links)
-        logger.info(
-            "Matching suggestion for '%s': %d derivations, %d packages found.",
-            container.cve,
-            len(links),
-            len(pkg_links),
+            else None,
+            rejection_max_matches_limit=outcome.rejection.max_matches_limit or None
+            if outcome.rejection
+            else None,
+            algorithm_version=CVEDerivationClusterProposal.CURRENT_ALGORITHM_VERSION,
         )
+
+        if outcome.derivations:
+            links = build_derivation_links(proposal, outcome.derivations)
+            DerivationClusterProposalLink.objects.bulk_create(links)
+            pkg_links = build_package_links(proposal, outcome.derivations)
+            PackageClusterProposalLink.objects.bulk_create(pkg_links)
+            logger.info(
+                "Matching suggestion for '%s': %d derivations, %d packages found.",
+                container.cve,
+                len(links),
+                len(pkg_links),
+            )
 
     return True
 

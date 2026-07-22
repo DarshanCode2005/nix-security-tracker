@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "preact/hooks";
 import { Redirect, Route, Switch } from "wouter-preact";
 import { Footer } from "@/components/footer/Footer";
 import { Disclaimer } from "@/components/header/Disclaimer";
 import { HeaderBar } from "@/components/header/HeaderBar";
+import { Toaster } from "@/components/ui/Toaster";
 import { Home } from "@/routes/Home";
 import { SuggestionDetail } from "@/routes/SuggestionDetail";
 import { UserSettings } from "@/routes/UserSettings";
+import { toaster } from "@/utils/toaster";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,6 +20,20 @@ const queryClient = new QueryClient({
 });
 
 export function App() {
+  // Fallback landing page when allauth's GitHub OAuth handshake fails
+  // The url param is set in settings.py: HEADLESS_FRONTEND_URLS["socialaccount_login_error"]
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("login_error")) {
+      toaster.error({
+        title: "Login failed",
+        description: "Something went wrong signing in with GitHub. Please try again.",
+      });
+      url.searchParams.delete("login_error");
+      window.history.replaceState({}, "", url);
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <HeaderBar />
@@ -36,6 +53,7 @@ export function App() {
         </Switch>
       </main>
       <Footer />
+      <Toaster toaster={toaster} />
     </QueryClientProvider>
   );
 }
