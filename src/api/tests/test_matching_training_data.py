@@ -67,8 +67,8 @@ def test_training_data_unauthenticated(url: str) -> None:
     assert response.status_code == 401
 
 
-@pytest.mark.parametrize("actor_fixture", ["user", "committer"])
-def test_training_data_non_admin_forbidden(
+@pytest.mark.parametrize("actor_fixture", ["user", "committer", "staff"])
+def test_training_data_without_group_forbidden(
     url: str,
     actor_fixture: str,
     request: pytest.FixtureRequest,
@@ -80,13 +80,13 @@ def test_training_data_non_admin_forbidden(
     assert response.status_code == 403
 
 
-def test_training_data_admin_lists_curated_only(
+def test_training_data_group_member_lists_curated_only(
     url: str,
-    staff: User,
+    matching_training_user: User,
     curated_proposals: dict[str, CVEDerivationClusterProposal],
 ) -> None:
     client = APIClient()
-    client.force_login(staff)
+    client.force_login(matching_training_user)
     response = client.get(url)
     assert response.status_code == 200
     assert response.data["count"] == 3
@@ -109,7 +109,7 @@ def test_training_data_admin_lists_curated_only(
 
 def test_training_data_pagination(
     url: str,
-    staff: User,
+    matching_training_user: User,
     make_container: Callable[..., Container],
     make_suggestion: Callable[..., CVEDerivationClusterProposal],
 ) -> None:
@@ -121,7 +121,7 @@ def test_training_data_pagination(
         )
 
     client = APIClient()
-    client.force_login(staff)
+    client.force_login(matching_training_user)
 
     page1 = client.get(url, {"page_size": 2, "page": 1})
     assert page1.status_code == 200

@@ -440,6 +440,7 @@ def make_user(
     def wrapped(
         is_staff: bool = False,
         is_committer: bool = False,
+        can_access_matching_training_data: bool = False,
         username: str = "testuser",
         provider: str = GitHubProvider.id,
         uid: str = "123",
@@ -452,6 +453,11 @@ def make_user(
             user.groups.add(group)
         if is_committer:
             group, _ = Group.objects.get_or_create(name=settings.DB_COMMITTERS_TEAM)
+            user.groups.add(group)
+        if can_access_matching_training_data:
+            group, _ = Group.objects.get_or_create(
+                name=settings.DB_MATCHING_TRAINING_DATA_GROUP
+            )
             user.groups.add(group)
 
         SocialAccount.objects.get_or_create(
@@ -478,6 +484,15 @@ def committer(make_user: Callable[..., User]) -> User:
 @pytest.fixture
 def staff(make_user: Callable[..., User]) -> User:
     return make_user(username="staff", is_staff=True, uid="789")
+
+
+@pytest.fixture
+def matching_training_user(make_user: Callable[..., User]) -> User:
+    return make_user(
+        username="matching-training",
+        can_access_matching_training_data=True,
+        uid="1011",
+    )
 
 
 @pytest.fixture
