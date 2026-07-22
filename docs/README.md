@@ -64,4 +64,4 @@ Ideally we will eventually get rid of the cache, but it requires incremental rew
 
 ## Further documentation
 
-- [Design Documents](./design/README.md): Why matching needs triage, plus linkage design notes.
+- [Design documents](./design/): Detailed design specifications for individual features

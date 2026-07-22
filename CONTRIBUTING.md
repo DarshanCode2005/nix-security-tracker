@@ -8,10 +8,10 @@ Resources to help you get started:
 
 - [**Quickstart guide**](./docs/quickstart.md): Set up a database, run the service locally.
 - [**Manual data ingestion and matching**](./docs/data_ingestion_and_matching.md): Ingest Nixpkgs metadata and CVEs into your local instance.
-- [**CVE records**](./docs/cve_records.md): What the tracker stores for each CVE
 - [**Architecture Overview**](docs/README.md): High-level system design and component interaction.
 - [**Architecture Diagram**](docs/architecture.mermaid): Visual representation of the system (Mermaid source).
-- [**Design Documents**](docs/design/): Why matching needs triage, plus linkage design notes.
+- [**Design documents**](docs/design/): Detailed design specifications for individual features
+- [**CVE records**](./docs/cve_records.md): What the tracker stores for each CVE
 
 Other directories in this repository have additional `README.md` files with more specific information relevant to their sibling files.
 
