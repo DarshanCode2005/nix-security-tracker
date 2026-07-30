@@ -6,7 +6,8 @@ from typing import Any
 
 from django.db.models import Prefetch, QuerySet
 
-from shared.matching_training_data.schema import SCHEMA_VERSION, normalize_record
+from shared.matching_training_data.constants import SCHEMA_VERSION
+from shared.matching_training_data.schema import normalize_record
 from shared.models.cve import Container
 from shared.models.linkage import (
     CVEDerivationClusterProposal,

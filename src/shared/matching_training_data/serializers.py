@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from shared.matching_training_data.schema import SCHEMA_VERSION
+from shared.matching_training_data.constants import SCHEMA_VERSION
 
 
 class DerivationFingerprintSerializer(serializers.Serializer):
@@ -63,7 +63,7 @@ class LabelsSerializer(serializers.Serializer):
     package_overlays = PackageOverlayDataSerializer(many=True, required=False)
     maintainer_overlays = MaintainerOverlayDataSerializer(many=True, required=False)
     reference_overlays = ReferenceOverlayDataSerializer(many=True, required=False)
-    comment = serializers.CharField(allow_null=True, required=False)
+    comment = serializers.CharField(allow_null=True, allow_blank=True, required=False)
     rejection_match_count = serializers.IntegerField(allow_null=True, required=False)
     rejection_max_matches_limit = serializers.IntegerField(
         allow_null=True, required=False

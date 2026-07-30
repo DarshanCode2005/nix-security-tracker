@@ -13,8 +13,8 @@ from shared.matching_training_data import (
     record_to_dict,
     user_curated_proposals,
 )
+from shared.matching_training_data.constants import BENCHMARK_CHANNEL_BRANCH
 from shared.matching_training_data.importer import ensure_benchmark_evaluation
-from shared.matching_training_data.schema import BENCHMARK_CHANNEL_BRANCH
 from shared.matching_training_data.serializers import TrainingRecordSerializer
 from shared.models.cve import Container, CveRecord, Tag
 from shared.models.linkage import (

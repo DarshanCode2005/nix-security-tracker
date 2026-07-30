@@ -8,7 +8,7 @@ from typing import Any
 
 from django.db import transaction
 
-from shared.matching_training_data.schema import BENCHMARK_CHANNEL_BRANCH
+from shared.matching_training_data.constants import BENCHMARK_CHANNEL_BRANCH
 from shared.models.cve import (
     AffectedProduct,
     Container,

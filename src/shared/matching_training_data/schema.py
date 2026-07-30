@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-SCHEMA_VERSION = 1
+from shared.matching_training_data.constants import (
+    BENCHMARK_CHANNEL_BRANCH,
+    SCHEMA_VERSION,
+)
 
-# Synthetic channel used when materializing a local benchmark corpus.
-BENCHMARK_CHANNEL_BRANCH = "benchmark"
+# Re-export for existing callers that import constants from schema.
+__all__ = [
+    "BENCHMARK_CHANNEL_BRANCH",
+    "SCHEMA_VERSION",
+    "derivation_fingerprint",
+    "normalize_record",
+    "record_from_dict",
+    "record_to_dict",
+]
 
 
 def derivation_fingerprint(*, attribute: str, name: str, system: str) -> dict[str, str]:

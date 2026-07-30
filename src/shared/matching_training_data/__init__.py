@@ -4,13 +4,13 @@ Export and import share one versioned schema so the offline benchmark corpus
 stays in sync with the data model.
 """
 
+from shared.matching_training_data.constants import SCHEMA_VERSION
 from shared.matching_training_data.export import (
     export_proposal,
     user_curated_proposals,
 )
 from shared.matching_training_data.importer import import_record
 from shared.matching_training_data.schema import (
-    SCHEMA_VERSION,
     derivation_fingerprint,
     normalize_record,
     record_from_dict,
