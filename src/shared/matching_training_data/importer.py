@@ -8,7 +8,10 @@ from typing import Any
 
 from django.db import transaction
 
-from shared.matching_training_data.constants import BENCHMARK_CHANNEL_BRANCH
+from shared.matching_training_data.constants import (
+    BENCHMARK_CHANNEL_BRANCH,
+    BENCHMARK_RELEASE_BRANCH,
+)
 from shared.models.cve import (
     AffectedProduct,
     Container,
@@ -30,6 +33,7 @@ from shared.models.nix_evaluation import (
     NixDerivationMeta,
     NixEvaluation,
     NixMaintainer,
+    NixpkgsBranch,
 )
 
 # Stable org for imported training CVEs (not a real NVD assigner).
@@ -38,13 +42,16 @@ _TRAINING_ORG_UUID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
 def ensure_benchmark_evaluation() -> NixEvaluation:
     """Create or reuse the synthetic benchmark channel + completed evaluation."""
+    release_branch, _ = NixpkgsBranch.objects.get_or_create(
+        name=BENCHMARK_RELEASE_BRANCH,
+        defaults={"head_sha1_commit": secrets.token_hex(20)},
+    )
     channel, _ = NixChannel.objects.get_or_create(
         channel_branch=BENCHMARK_CHANNEL_BRANCH,
         defaults={
-            "release_branch": "master",
+            "release_branch": release_branch,
             "state": NixChannel.ChannelState.UNSTABLE,
             "head_sha1_commit": secrets.token_hex(20),
-            "repository": "https://github.com/NixOS/nixpkgs",
             "variant": None,
         },
     )

@@ -4,3 +4,6 @@ SCHEMA_VERSION = 1
 
 # Synthetic channel used when materializing a local benchmark corpus.
 BENCHMARK_CHANNEL_BRANCH = "benchmark"
+
+# Nixpkgs branch backing the synthetic benchmark channel.
+BENCHMARK_RELEASE_BRANCH = "benchmark-master"
