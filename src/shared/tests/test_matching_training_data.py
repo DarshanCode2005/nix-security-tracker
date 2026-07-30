@@ -1,25 +1,21 @@
 from collections.abc import Callable
 
+import pytest
+from rest_framework.exceptions import ValidationError
+
 from shared.listeners.automatic_linkage import resolve_linkage_candidates
 from shared.matching_training_data import (
     SCHEMA_VERSION,
     export_proposal,
     import_record,
+    normalize_record,
     record_from_dict,
     record_to_dict,
     user_curated_proposals,
 )
 from shared.matching_training_data.importer import ensure_benchmark_evaluation
-from shared.matching_training_data.schema import (
-    BENCHMARK_CHANNEL_BRANCH,
-    AffectedProductData,
-    ContainerData,
-    DerivationData,
-    DerivationFingerprint,
-    Labels,
-    PackageOverlayData,
-    TrainingRecord,
-)
+from shared.matching_training_data.schema import BENCHMARK_CHANNEL_BRANCH
+from shared.matching_training_data.serializers import TrainingRecordSerializer
 from shared.models.cve import Container, CveRecord, Tag
 from shared.models.linkage import (
     CVEDerivationClusterProposal,
@@ -30,53 +26,84 @@ from shared.models.linkage import (
 from shared.models.nix_evaluation import NixChannel, NixDerivation, NixEvaluation
 
 
-def test_schema_dict_roundtrip_preserves_fields() -> None:
-    record = TrainingRecord(
-        schema_version=SCHEMA_VERSION,
-        cve_id="CVE-2026-9999",
-        container=ContainerData(
-            tags=("exclusively-hosted-service",),
-            affected=(
-                AffectedProductData(
-                    vendor="acme",
-                    product="widget",
-                    package_name="foo",
-                    cpes=("cpe:2.3:a:acme:widget:1.0:*:*:*:*:*:*:*",),
-                ),
-            ),
-        ),
-        labels=Labels(
-            status="accepted",
-            rejection_reason=None,
-            kept_derivations=(DerivationFingerprint("foo", "foo-1.0", "x86_64-linux"),),
-            ignored_packages=("foo.tests",),
-            package_overlays=(
-                PackageOverlayData("foo.tests", PackageOverlay.Type.IGNORED),
-            ),
-        ),
-        derivations=(
-            DerivationData(
-                attribute="foo",
-                name="foo-1.0",
-                system="x86_64-linux",
-                known_vulnerabilities=(),
-                provenance_flags=int(ProvenanceFlags.PACKAGE_NAME_MATCH),
-                was_linked=True,
-            ),
-            DerivationData(
-                attribute="foo.tests",
-                name="foo-tests-1.0",
-                system="x86_64-linux",
-                known_vulnerabilities=(),
-                provenance_flags=int(ProvenanceFlags.PACKAGE_NAME_MATCH),
-                was_linked=True,
-            ),
-        ),
-        algorithm_version=1,
-    )
+def _sample_record() -> dict:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "cve_id": "CVE-2026-9999",
+        "container": {
+            "tags": ["exclusively-hosted-service"],
+            "affected": [
+                {
+                    "vendor": "acme",
+                    "product": "widget",
+                    "package_name": "foo",
+                    "cpes": ["cpe:2.3:a:acme:widget:1.0:*:*:*:*:*:*:*"],
+                },
+            ],
+        },
+        "labels": {
+            "status": "accepted",
+            "rejection_reason": None,
+            "kept_derivations": [
+                {
+                    "attribute": "foo",
+                    "name": "foo-1.0",
+                    "system": "x86_64-linux",
+                },
+            ],
+            "ignored_packages": ["foo.tests"],
+            "package_overlays": [
+                {
+                    "package_attribute": "foo.tests",
+                    "overlay_type": PackageOverlay.Type.IGNORED,
+                },
+            ],
+            "maintainer_overlays": [],
+            "reference_overlays": [],
+            "comment": None,
+            "rejection_match_count": None,
+            "rejection_max_matches_limit": None,
+        },
+        "derivations": [
+            {
+                "attribute": "foo",
+                "name": "foo-1.0",
+                "system": "x86_64-linux",
+                "known_vulnerabilities": [],
+                "provenance_flags": int(ProvenanceFlags.PACKAGE_NAME_MATCH),
+                "was_linked": True,
+            },
+            {
+                "attribute": "foo.tests",
+                "name": "foo-tests-1.0",
+                "system": "x86_64-linux",
+                "known_vulnerabilities": [],
+                "provenance_flags": int(ProvenanceFlags.PACKAGE_NAME_MATCH),
+                "was_linked": True,
+            },
+        ],
+        "algorithm_version": 1,
+    }
 
+
+def test_schema_dict_roundtrip_preserves_fields() -> None:
+    record = _sample_record()
     restored = record_from_dict(record_to_dict(record))
-    assert restored.normalized() == record.normalized()
+    assert restored == normalize_record(record)
+
+    serializer = TrainingRecordSerializer(data=record_to_dict(record))
+    assert serializer.is_valid(), serializer.errors
+
+
+def test_schema_version_rejected() -> None:
+    record = _sample_record()
+    record["schema_version"] = SCHEMA_VERSION + 1
+    with pytest.raises(ValueError, match="schema_version"):
+        record_from_dict(record)
+
+    serializer = TrainingRecordSerializer(data=record)
+    with pytest.raises(ValidationError):
+        serializer.is_valid(raise_exception=True)
 
 
 def test_user_curated_proposals_excludes_pending(
@@ -152,17 +179,16 @@ def test_export_import_export_roundtrip(
     )
 
     original = export_proposal(proposal)
-    assert original.schema_version == SCHEMA_VERSION
-    assert original.cve_id == "CVE-2026-4242"
-    assert original.labels.status == "accepted"
-    assert original.labels.ignored_packages == ("foobar.tests",)
-    assert DerivationFingerprint("foobar", "foobar-1.2.3", "x86_64-linux") in (
-        original.labels.kept_derivations
-    )
-    assert (
-        DerivationFingerprint("foobar.tests", "foobar-tests-1.2.3", "x86_64-linux")
-        not in original.labels.kept_derivations
-    )
+    assert original["schema_version"] == SCHEMA_VERSION
+    assert original["cve_id"] == "CVE-2026-4242"
+    assert original["labels"]["status"] == "accepted"
+    assert original["labels"]["ignored_packages"] == ["foobar.tests"]
+    kept = {
+        (d["attribute"], d["name"], d["system"])
+        for d in original["labels"]["kept_derivations"]
+    }
+    assert ("foobar", "foobar-1.2.3", "x86_64-linux") in kept
+    assert ("foobar.tests", "foobar-tests-1.2.3", "x86_64-linux") not in kept
 
     CveRecord.objects.filter(cve_id="CVE-2026-4242").delete()
     assert not CVEDerivationClusterProposal.objects.filter(
@@ -177,7 +203,7 @@ def test_export_import_export_roundtrip(
     assert NixChannel.objects.filter(channel_branch=BENCHMARK_CHANNEL_BRANCH).exists()
 
     reexported = export_proposal(imported)
-    assert reexported.normalized() == original.normalized()
+    assert reexported == original
 
     imported_container = imported.cve.container.first()
     assert imported_container is not None
@@ -200,14 +226,14 @@ def test_export_import_auto_reject_without_links(
     )
 
     original = export_proposal(proposal)
-    assert original.labels.kept_derivations == ()
-    assert original.derivations == ()
-    assert "exclusively-hosted-service" in original.container.tags
+    assert original["labels"]["kept_derivations"] == []
+    assert original["derivations"] == []
+    assert "exclusively-hosted-service" in original["container"]["tags"]
 
     CveRecord.objects.filter(cve_id="CVE-2026-0007").delete()
     imported = import_record(original)
     reexported = export_proposal(imported)
-    assert reexported.normalized() == original.normalized()
+    assert reexported == original
 
     imported_container = imported.cve.container.first()
     assert imported_container is not None

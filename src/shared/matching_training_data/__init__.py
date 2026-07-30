@@ -11,18 +11,20 @@ from shared.matching_training_data.export import (
 from shared.matching_training_data.importer import import_record
 from shared.matching_training_data.schema import (
     SCHEMA_VERSION,
-    TrainingRecord,
     derivation_fingerprint,
+    normalize_record,
     record_from_dict,
     record_to_dict,
 )
+from shared.matching_training_data.serializers import TrainingRecordSerializer
 
 __all__ = [
     "SCHEMA_VERSION",
-    "TrainingRecord",
+    "TrainingRecordSerializer",
     "derivation_fingerprint",
     "export_proposal",
     "import_record",
+    "normalize_record",
     "record_from_dict",
     "record_to_dict",
     "user_curated_proposals",
