@@ -15,7 +15,6 @@ from shared.models.linkage import CVEDerivationClusterProposal
 
 
 class CanAccessMatchingTrainingData(BasePermission):
-
     def has_permission(self, request: Request, view: APIView) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
         return bool(request.user and can_access_matching_training_data(request.user))
 

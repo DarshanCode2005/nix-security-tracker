@@ -16,7 +16,7 @@ def remove_matching_training_data_group(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("shared", "0100_rename_overlay_type_column_to_type_column"),
+        ("shared", "0101_nixpkgsbranch_nixchannel_release_branch"),
     ]
 
     operations = [
