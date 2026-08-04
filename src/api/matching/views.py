@@ -1,4 +1,4 @@
-from django.db.models import QuerySet
+from django.db.models import Prefetch, QuerySet
 from drf_spectacular.utils import extend_schema
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
@@ -10,8 +10,10 @@ from rest_framework.views import APIView
 from api.matching.serializers import MatchingTrainingRecordSerializer
 from api.serializers import ErrorDetailSerializer
 from shared.auth import can_access_matching_training_data
-from shared.matching_training_data import user_curated_proposals
-from shared.models.linkage import CVEDerivationClusterProposal
+from shared.models.linkage import (
+    CVEDerivationClusterProposal,
+    DerivationClusterProposalLink,
+)
 
 
 class CanAccessMatchingTrainingData(BasePermission):
@@ -33,7 +35,22 @@ class MatchingTrainingDataView(ListAPIView):
     serializer_class = MatchingTrainingRecordSerializer
 
     def get_queryset(self) -> QuerySet[CVEDerivationClusterProposal]:  # pyright: ignore[reportIncompatibleMethodOverride]
-        return user_curated_proposals()
+        return (
+            CVEDerivationClusterProposal.objects.user_curated()
+            .select_related("cve")
+            .prefetch_related(
+                "cve__container__tags",
+                "cve__container__affected__cpes",
+                Prefetch(
+                    "derivationclusterproposallink_set",
+                    queryset=DerivationClusterProposalLink.objects.select_related(
+                        "derivation__metadata"
+                    ),
+                ),
+                "package_overlays",
+            )
+            .order_by("pk")
+        )
 
     @extend_schema(
         operation_id="listMatchingTrainingData",

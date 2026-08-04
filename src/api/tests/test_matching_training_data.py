@@ -5,11 +5,8 @@ from django.contrib.auth.models import User
 from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
-from shared.matching_training_data import (
-    SCHEMA_VERSION,
-    export_proposal,
-    record_to_dict,
-)
+from shared.matching_training_data import SCHEMA_VERSION
+from shared.matching_training_data import serializers as mtd
 from shared.models.cve import Container
 from shared.models.linkage import (
     CVEDerivationClusterProposal,
@@ -96,15 +93,15 @@ def test_training_data_group_member_lists_curated_only(
     assert cve_ids == {"CVE-2026-acc", "CVE-2026-rej", "CVE-2026-auto"}
 
     by_cve = {row["cve_id"]: row for row in response.data["results"]}
-    assert by_cve["CVE-2026-auto"]["labels"]["status"] == "rejected"
+    assert by_cve["CVE-2026-auto"]["status"] == "rejected"
     assert (
-        by_cve["CVE-2026-auto"]["labels"]["rejection_reason"]
+        by_cve["CVE-2026-auto"]["rejection_reason"]
         == CVEDerivationClusterProposal.RejectionReason.NO_MATCHES
     )
     assert by_cve["CVE-2026-acc"]["schema_version"] == SCHEMA_VERSION
-    assert by_cve["CVE-2026-acc"] == record_to_dict(
-        export_proposal(curated_proposals["accepted"])
-    )
+    assert by_cve["CVE-2026-acc"] == mtd.CVEDerivationClusterProposal(
+        curated_proposals["accepted"]
+    ).data
 
 
 def test_training_data_pagination(

@@ -1,16 +1,11 @@
 """API adapter for matching training-data export.
 
-Field schema lives in ``shared.matching_training_data.serializers``;
-this wrapper maps ORM proposals onto that round-tripping wire format.
+Wire format lives in ``shared.matching_training_data.serializers``;
+this subclass is only a named API entrypoint for OpenAPI / views.
 """
 
-from shared.matching_training_data import export_proposal, record_to_dict
-from shared.matching_training_data.serializers import TrainingRecordSerializer
-from shared.models.linkage import CVEDerivationClusterProposal
+from shared.matching_training_data.serializers import CVEDerivationClusterProposal
 
 
-class MatchingTrainingRecordSerializer(TrainingRecordSerializer):
-    """Serialize a curated proposal via the shared training-data export."""
-
-    def to_representation(self, instance: CVEDerivationClusterProposal) -> dict:
-        return record_to_dict(export_proposal(instance))
+class MatchingTrainingRecordSerializer(CVEDerivationClusterProposal):
+    """Serialize a curated proposal via the shared training-data ModelSerializer."""
