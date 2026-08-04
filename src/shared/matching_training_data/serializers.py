@@ -1,84 +1,223 @@
-"""DRF serializers for matching training-data records (round-tripping schema)."""
+"""DRF ModelSerializers for matching training-data roundtrip.
+
+Serializers are named after the models they read/write. Export with
+``CVEDerivationClusterProposal(instance).data``; import with
+``CVEDerivationClusterProposal(data=...).is_valid(); .save()``.
+"""
 
 from __future__ import annotations
 
+import secrets
+import uuid
+from typing import Any
+
+from django.db import transaction
 from rest_framework import serializers
 
-from shared.matching_training_data.constants import SCHEMA_VERSION
+from shared.models.cve import (
+    AffectedProduct as AffectedProductModel,
+)
+from shared.models.cve import (
+    Container as ContainerModel,
+)
+from shared.models.cve import (
+    Cpe as CpeModel,
+)
+from shared.models.cve import (
+    CveRecord,
+    Organization,
+    Tag,
+)
+from shared.models.linkage import (
+    CVEDerivationClusterProposal as CVEDerivationClusterProposalModel,
+)
+from shared.models.linkage import (
+    DerivationClusterProposalLink as DerivationClusterProposalLinkModel,
+)
+from shared.models.linkage import (
+    PackageOverlay as PackageOverlayModel,
+)
+from shared.models.nix_evaluation import (
+    NixChannel,
+    NixDerivationMeta,
+    NixEvaluation,
+    NixpkgsBranch,
+)
+from shared.models.nix_evaluation import (
+    NixDerivation as NixDerivationModel,
+)
+
+SCHEMA_VERSION = 1
+
+# Synthetic channel used when materializing a local benchmark corpus
+BENCHMARK_CHANNEL_BRANCH = "benchmark"
+BENCHMARK_RELEASE_BRANCH = "benchmark-master"
+
+# Stable org for imported training CVEs
+_TRAINING_ORG_UUID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
 
-class DerivationFingerprintSerializer(serializers.Serializer):
-    attribute = serializers.CharField()
-    name = serializers.CharField()
-    system = serializers.CharField()
+def ensure_benchmark_evaluation() -> NixEvaluation:
+    """Create or reuse the synthetic benchmark channel + completed evaluation."""
+    release_branch, _ = NixpkgsBranch.objects.get_or_create(
+        name=BENCHMARK_RELEASE_BRANCH,
+        defaults={"head_sha1_commit": secrets.token_hex(20)},
+    )
+    channel, _ = NixChannel.objects.get_or_create(
+        channel_branch=BENCHMARK_CHANNEL_BRANCH,
+        defaults={
+            "release_branch": release_branch,
+            "state": NixChannel.ChannelState.UNSTABLE,
+            "head_sha1_commit": secrets.token_hex(20),
+            "variant": None,
+        },
+    )
+    evaluation = (
+        NixEvaluation.objects.filter(
+            channel=channel,
+            state=NixEvaluation.EvaluationState.COMPLETED,
+        )
+        .order_by("-updated_at")
+        .first()
+    )
+    if evaluation is None:
+        evaluation = NixEvaluation.objects.create(
+            channel=channel,
+            commit_sha1=secrets.token_hex(20),
+            state=NixEvaluation.EvaluationState.COMPLETED,
+        )
+    return evaluation
 
 
-class AffectedProductDataSerializer(serializers.Serializer):
-    vendor = serializers.CharField(allow_null=True)
-    product = serializers.CharField(allow_null=True)
-    package_name = serializers.CharField(allow_null=True)
+def _ensure_organization() -> Organization:
+    org, _ = Organization.objects.get_or_create(
+        uuid=_TRAINING_ORG_UUID,
+        defaults={"short_name": "training-data"},
+    )
+    return org
+
+
+def _select_container(
+    proposal: CVEDerivationClusterProposalModel,
+) -> ContainerModel | None:
+    return (
+        proposal.cve.container.filter(affected__package_name__isnull=False).first()
+        or proposal.cve.container.first()
+    )
+
+
+class AffectedProduct(serializers.ModelSerializer):
     cpes = serializers.ListField(child=serializers.CharField(), required=False)
 
+    class Meta:
+        model = AffectedProductModel
+        fields = ("vendor", "product", "package_name", "cpes")
 
-class ContainerDataSerializer(serializers.Serializer):
+    def to_representation(self, instance: AffectedProductModel) -> dict[str, Any]:
+        return {
+            "vendor": instance.vendor,
+            "product": instance.product,
+            "package_name": instance.package_name,
+            "cpes": sorted(cpe.name for cpe in instance.cpes.all()),
+        }
+
+
+class Container(serializers.Serializer):
+    """Training subset of Container: tags + affected products."""
+
     tags = serializers.ListField(child=serializers.CharField(), required=False)
-    affected = AffectedProductDataSerializer(many=True, required=False)
+    affected = AffectedProduct(many=True, required=False)
+
+    def to_representation(self, instance: ContainerModel) -> dict[str, Any]:
+        affected = [
+            AffectedProduct().to_representation(product)
+            for product in instance.affected.all()
+        ]
+        return {
+            "tags": sorted(tag.value for tag in instance.tags.all()),
+            "affected": sorted(
+                affected,
+                key=lambda a: (
+                    a.get("package_name") or "",
+                    a.get("product") or "",
+                    a.get("vendor") or "",
+                    tuple(a.get("cpes") or []),
+                ),
+            ),
+        }
 
 
-class DerivationDataSerializer(serializers.Serializer):
-    attribute = serializers.CharField()
-    name = serializers.CharField()
-    system = serializers.CharField()
+class NixDerivation(serializers.ModelSerializer):
     known_vulnerabilities = serializers.ListField(
-        child=serializers.CharField(), required=False
-    )
-    provenance_flags = serializers.IntegerField()
-    was_linked = serializers.BooleanField()
-
-
-class PackageOverlayDataSerializer(serializers.Serializer):
-    package_attribute = serializers.CharField()
-    overlay_type = serializers.CharField()
-
-
-class MaintainerOverlayDataSerializer(serializers.Serializer):
-    github_id = serializers.IntegerField()
-    github = serializers.CharField()
-    overlay_type = serializers.CharField()
-
-
-class ReferenceOverlayDataSerializer(serializers.Serializer):
-    reference_url = serializers.CharField()
-    overlay_type = serializers.CharField()
-    deduplicated_name = serializers.CharField(required=False, allow_blank=True)
-
-
-class LabelsSerializer(serializers.Serializer):
-    status = serializers.CharField()
-    rejection_reason = serializers.CharField(allow_null=True, required=False)
-    kept_derivations = DerivationFingerprintSerializer(many=True, required=False)
-    ignored_packages = serializers.ListField(
-        child=serializers.CharField(), required=False
-    )
-    package_overlays = PackageOverlayDataSerializer(many=True, required=False)
-    maintainer_overlays = MaintainerOverlayDataSerializer(many=True, required=False)
-    reference_overlays = ReferenceOverlayDataSerializer(many=True, required=False)
-    comment = serializers.CharField(allow_null=True, allow_blank=True, required=False)
-    rejection_match_count = serializers.IntegerField(allow_null=True, required=False)
-    rejection_max_matches_limit = serializers.IntegerField(
-        allow_null=True, required=False
+        child=serializers.CharField(),
+        required=False,
     )
 
+    class Meta:
+        model = NixDerivationModel
+        fields = ("attribute", "name", "system", "known_vulnerabilities")
 
-class TrainingRecordSerializer(serializers.Serializer):
+    def to_representation(self, instance: NixDerivationModel) -> dict[str, Any]:
+        known: list[str] = []
+        if instance.metadata_id is not None and instance.metadata is not None:
+            known = list(instance.metadata.known_vulnerabilities or [])
+        return {
+            "attribute": instance.attribute,
+            "name": instance.name,
+            "system": instance.system,
+            "known_vulnerabilities": known,
+        }
+
+
+class DerivationClusterProposalLink(serializers.ModelSerializer):
+    derivation = NixDerivation()
+
+    class Meta:
+        model = DerivationClusterProposalLinkModel
+        fields = ("derivation", "provenance_flags")
+
+
+class PackageOverlay(serializers.ModelSerializer):
+    type = serializers.ChoiceField(choices=PackageOverlayModel.Type.choices)
+
+    class Meta:
+        model = PackageOverlayModel
+        fields = ("package_attribute", "type")
+
+
+class CVEDerivationClusterProposal(serializers.ModelSerializer):
     """Versioned matching training-data record (export/import wire format)."""
 
     schema_version = serializers.IntegerField()
     cve_id = serializers.CharField()
-    container = ContainerDataSerializer()
-    labels = LabelsSerializer()
-    derivations = DerivationDataSerializer(many=True, required=False)
-    algorithm_version = serializers.IntegerField()
+    container = Container()
+    derivationclusterproposallink_set = DerivationClusterProposalLink(
+        many=True,
+        required=False,
+    )
+    package_overlays = PackageOverlay(many=True, required=False)
+    kept_derivations = serializers.SerializerMethodField()
+    ignored_packages = serializers.SerializerMethodField()
+    comment = serializers.CharField(allow_null=True, allow_blank=True, required=False)
+
+    class Meta:
+        model = CVEDerivationClusterProposalModel
+        fields = (
+            "schema_version",
+            "cve_id",
+            "container",
+            "status",
+            "rejection_reason",
+            "comment",
+            "rejection_match_count",
+            "rejection_max_matches_limit",
+            "algorithm_version",
+            "derivationclusterproposallink_set",
+            "package_overlays",
+            "kept_derivations",
+            "ignored_packages",
+        )
+        read_only_fields = ("kept_derivations", "ignored_packages")
 
     def validate_schema_version(self, value: int) -> int:
         if value != SCHEMA_VERSION:
@@ -87,3 +226,185 @@ class TrainingRecordSerializer(serializers.Serializer):
                 f"expected {SCHEMA_VERSION}"
             )
         return value
+
+    def get_ignored_packages(
+        self, obj: CVEDerivationClusterProposalModel
+    ) -> list[str]:
+        return sorted(
+            overlay.package_attribute
+            for overlay in obj.package_overlays.all()
+            if overlay.type == PackageOverlayModel.Type.IGNORED
+        )
+
+    def get_kept_derivations(
+        self, obj: CVEDerivationClusterProposalModel
+    ) -> list[dict[str, str]]:
+        if obj.status == CVEDerivationClusterProposalModel.Status.REJECTED:
+            return []
+        ignored = set(self.get_ignored_packages(obj))
+        kept = [
+            {
+                "attribute": link.derivation.attribute,
+                "name": link.derivation.name,
+                "system": link.derivation.system,
+            }
+            for link in obj.derivationclusterproposallink_set.all()
+            if link.derivation.attribute not in ignored
+        ]
+        return sorted(kept, key=lambda d: (d["attribute"], d["name"], d["system"]))
+
+    def to_representation(
+        self, instance: CVEDerivationClusterProposalModel
+    ) -> dict[str, Any]:
+        container = _select_container(instance)
+        if container is None:
+            raise ValueError(
+                f"Proposal {instance.pk} for {instance.cve.cve_id} has no CVE container"
+            )
+
+        links = [
+            DerivationClusterProposalLink().to_representation(link)
+            for link in instance.derivationclusterproposallink_set.select_related(
+                "derivation__metadata"
+            )
+        ]
+        links = sorted(
+            links,
+            key=lambda row: (
+                row["derivation"]["attribute"],
+                row["derivation"]["name"],
+                row["derivation"]["system"],
+            ),
+        )
+        overlays = [
+            PackageOverlay().to_representation(overlay)
+            for overlay in instance.package_overlays.all()
+        ]
+        overlays = sorted(
+            overlays,
+            key=lambda o: (o["package_attribute"], o["type"]),
+        )
+
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "cve_id": instance.cve.cve_id,
+            "container": Container().to_representation(container),
+            "status": instance.status,
+            "rejection_reason": instance.rejection_reason,
+            "comment": instance.comment,
+            "rejection_match_count": instance.rejection_match_count,
+            "rejection_max_matches_limit": instance.rejection_max_matches_limit,
+            "algorithm_version": instance.algorithm_version,
+            "derivationclusterproposallink_set": links,
+            "package_overlays": overlays,
+            "kept_derivations": self.get_kept_derivations(instance),
+            "ignored_packages": self.get_ignored_packages(instance),
+        }
+
+    @transaction.atomic
+    def create(
+        self, validated_data: dict[str, Any]
+    ) -> CVEDerivationClusterProposalModel:
+        """
+        Materialize a training record on the synthetic benchmark channel.
+
+        Idempotent per ``cve_id``: any existing CVE with that id is replaced.
+        """
+        evaluation = ensure_benchmark_evaluation()
+        validated_data.pop("schema_version")
+        cve_id = validated_data.pop("cve_id")
+        container_data = validated_data.pop("container")
+        links_data = validated_data.pop("derivationclusterproposallink_set", [])
+        overlays_data = validated_data.pop("package_overlays", [])
+
+        CveRecord.objects.filter(cve_id=cve_id).delete()
+        org = _ensure_organization()
+
+        cve = CveRecord.objects.create(cve_id=cve_id, assigner=org)
+        container = ContainerModel.objects.create(
+            cve=cve,
+            provider=org,
+            title=f"Training data for {cve_id}",
+        )
+
+        tag_objs = []
+        for value in container_data.get("tags") or []:
+            tag, _ = Tag.objects.get_or_create(value=value)
+            tag_objs.append(tag)
+        if tag_objs:
+            container.tags.set(tag_objs)
+
+        for affected_data in container_data.get("affected") or []:
+            affected = AffectedProductModel.objects.create(
+                vendor=affected_data.get("vendor"),
+                product=affected_data.get("product"),
+                package_name=affected_data.get("package_name"),
+            )
+            for cpe_name in affected_data.get("cpes") or []:
+                cpe, _ = CpeModel.objects.get_or_create(name=cpe_name)
+                affected.cpes.add(cpe)
+            container.affected.add(affected)
+
+        by_fingerprint: dict[tuple[str, str, str], NixDerivationModel] = {}
+        for link_data in links_data:
+            drv_data = link_data["derivation"]
+            key = (drv_data["attribute"], drv_data["name"], drv_data["system"])
+            if key not in by_fingerprint:
+                meta = NixDerivationMeta.objects.create(
+                    description="Imported training derivation",
+                    homepage=None,
+                    insecure=False,
+                    available=True,
+                    broken=False,
+                    unfree=False,
+                    unsupported=False,
+                    known_vulnerabilities=list(
+                        drv_data.get("known_vulnerabilities") or []
+                    ),
+                )
+                by_fingerprint[key] = NixDerivationModel.objects.create(
+                    attribute=drv_data["attribute"],
+                    derivation_path=(
+                        f"/nix/store/training-{secrets.token_hex(8)}"
+                        f"-{drv_data['name']}.drv"
+                    ),
+                    name=drv_data["name"],
+                    metadata=meta,
+                    system=drv_data["system"],
+                    parent_evaluation=evaluation,
+                )
+
+        proposal = CVEDerivationClusterProposalModel.objects.create(
+            cve=cve,
+            status=validated_data["status"],
+            rejection_reason=validated_data.get("rejection_reason"),
+            comment=validated_data.get("comment"),
+            rejection_match_count=validated_data.get("rejection_match_count"),
+            rejection_max_matches_limit=validated_data.get(
+                "rejection_max_matches_limit"
+            ),
+            algorithm_version=validated_data["algorithm_version"],
+        )
+
+        link_objs = []
+        for link_data in links_data:
+            drv_data = link_data["derivation"]
+            key = (drv_data["attribute"], drv_data["name"], drv_data["system"])
+            link_objs.append(
+                DerivationClusterProposalLinkModel(
+                    proposal=proposal,
+                    derivation=by_fingerprint[key],
+                    provenance_flags=link_data["provenance_flags"],
+                )
+            )
+        if link_objs:
+            DerivationClusterProposalLinkModel.objects.bulk_create(link_objs)
+
+        for overlay in overlays_data:
+            PackageOverlayModel.objects.create(
+                suggestion=proposal,
+                package_attribute=overlay["package_attribute"],
+                type=overlay["type"],
+            )
+
+        return proposal
