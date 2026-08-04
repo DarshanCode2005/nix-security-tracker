@@ -61,6 +61,10 @@ class CVEDerivationClusterProposalQuerySet(models.QuerySet):
             | ~Q(status=CVEDerivationClusterProposal.Status.PENDING)
         )
 
+    def user_curated(self) -> "CVEDerivationClusterProposalQuerySet":
+        """Proposals touched by users or auto-triage(excluding pending ones)"""
+        return self.exclude(status=CVEDerivationClusterProposal.Status.PENDING)
+
 
 @pghistory.track(
     fields=["status", "rejection_reason"],
