@@ -6,8 +6,8 @@ from rest_framework.exceptions import ValidationError
 from shared.listeners.automatic_linkage import resolve_linkage_candidates
 from shared.matching_training_data import serializers as mtd
 from shared.matching_training_data.serializers import (
-    SCHEMA_VERSION,
     BENCHMARK_CHANNEL_BRANCH,
+    SCHEMA_VERSION,
     ensure_benchmark_evaluation,
 )
 from shared.models.cve import Container, CveRecord, Tag

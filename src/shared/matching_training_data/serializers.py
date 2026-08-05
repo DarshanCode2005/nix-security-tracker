@@ -1,5 +1,9 @@
 """DRF ModelSerializers for matching training-data roundtrip.
 
+The exported derivation and CVE data is exactly what we assume is required for
+matching them reproducibly.
+Adapt that appropriately when the matching algorithm changes.
+
 Serializers are named after the models they read/write. Export with
 ``CVEDerivationClusterProposal(instance).data``; import with
 ``CVEDerivationClusterProposal(data=...).is_valid(); .save()``.
@@ -333,9 +337,7 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
             attribute = drv_data["attribute"]
             name = drv_data["name"]
             system = drv_data["system"]
-            drv_path = _training_drv_path(
-                attribute=attribute, name=name, system=system
-            )
+            drv_path = _training_drv_path(attribute=attribute, name=name, system=system)
             # Same uniqueness degrees of freedom as evaluation ingestion
             # (shared.evaluation.derivation_as_key). Training JSON has no real
             # drv_path, so we use a deterministic synthetic path that embeds
