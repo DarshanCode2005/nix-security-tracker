@@ -92,7 +92,9 @@ class AffectedProduct(serializers.ModelSerializer):
 
 
 class Container(serializers.Serializer):
-    """Training subset of Container: tags + affected products."""
+    """
+    Subset of Container fields relevant for training data
+    """
 
     tags = serializers.ListField(child=serializers.CharField(), required=False)
     affected = AffectedProduct(many=True, required=False)
