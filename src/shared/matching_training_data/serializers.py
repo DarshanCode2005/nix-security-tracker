@@ -14,38 +14,7 @@ from typing import Any
 from django.db import transaction
 from rest_framework import serializers
 
-from shared.models.cve import (
-    AffectedProduct as AffectedProductModel,
-)
-from shared.models.cve import (
-    Container as ContainerModel,
-)
-from shared.models.cve import (
-    Cpe as CpeModel,
-)
-from shared.models.cve import (
-    CveRecord,
-    Organization,
-    Tag,
-)
-from shared.models.linkage import (
-    CVEDerivationClusterProposal as CVEDerivationClusterProposalModel,
-)
-from shared.models.linkage import (
-    DerivationClusterProposalLink as DerivationClusterProposalLinkModel,
-)
-from shared.models.linkage import (
-    PackageOverlay as PackageOverlayModel,
-)
-from shared.models.nix_evaluation import (
-    NixChannel,
-    NixDerivationMeta,
-    NixEvaluation,
-    NixpkgsBranch,
-)
-from shared.models.nix_evaluation import (
-    NixDerivation as NixDerivationModel,
-)
+from shared import models
 
 SCHEMA_VERSION = 1
 
@@ -57,40 +26,40 @@ BENCHMARK_RELEASE_BRANCH = "benchmark-master"
 _TRAINING_ORG_UUID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
 
-def ensure_benchmark_evaluation() -> NixEvaluation:
+def ensure_benchmark_evaluation() -> models.NixEvaluation:
     """Create or reuse the synthetic benchmark channel + completed evaluation."""
-    release_branch, _ = NixpkgsBranch.objects.get_or_create(
+    release_branch, _ = models.NixpkgsBranch.objects.get_or_create(
         name=BENCHMARK_RELEASE_BRANCH,
         defaults={"head_sha1_commit": secrets.token_hex(20)},
     )
-    channel, _ = NixChannel.objects.get_or_create(
+    channel, _ = models.NixChannel.objects.get_or_create(
         channel_branch=BENCHMARK_CHANNEL_BRANCH,
         defaults={
             "release_branch": release_branch,
-            "state": NixChannel.ChannelState.UNSTABLE,
+            "state": models.NixChannel.ChannelState.UNSTABLE,
             "head_sha1_commit": secrets.token_hex(20),
             "variant": None,
         },
     )
     evaluation = (
-        NixEvaluation.objects.filter(
+        models.NixEvaluation.objects.filter(
             channel=channel,
-            state=NixEvaluation.EvaluationState.COMPLETED,
+            state=models.NixEvaluation.EvaluationState.COMPLETED,
         )
         .order_by("-updated_at")
         .first()
     )
     if evaluation is None:
-        evaluation = NixEvaluation.objects.create(
+        evaluation = models.NixEvaluation.objects.create(
             channel=channel,
             commit_sha1=secrets.token_hex(20),
-            state=NixEvaluation.EvaluationState.COMPLETED,
+            state=models.NixEvaluation.EvaluationState.COMPLETED,
         )
     return evaluation
 
 
-def _ensure_organization() -> Organization:
-    org, _ = Organization.objects.get_or_create(
+def _ensure_organization() -> models.Organization:
+    org, _ = models.Organization.objects.get_or_create(
         uuid=_TRAINING_ORG_UUID,
         defaults={"short_name": "training-data"},
     )
@@ -98,8 +67,8 @@ def _ensure_organization() -> Organization:
 
 
 def _select_container(
-    proposal: CVEDerivationClusterProposalModel,
-) -> ContainerModel | None:
+    proposal: models.CVEDerivationClusterProposal,
+) -> models.Container | None:
     return (
         proposal.cve.container.filter(affected__package_name__isnull=False).first()
         or proposal.cve.container.first()
@@ -110,10 +79,10 @@ class AffectedProduct(serializers.ModelSerializer):
     cpes = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
-        model = AffectedProductModel
+        model = models.AffectedProduct
         fields = ("vendor", "product", "package_name", "cpes")
 
-    def to_representation(self, instance: AffectedProductModel) -> dict[str, Any]:
+    def to_representation(self, instance: models.AffectedProduct) -> dict[str, Any]:
         return {
             "vendor": instance.vendor,
             "product": instance.product,
@@ -128,7 +97,7 @@ class Container(serializers.Serializer):
     tags = serializers.ListField(child=serializers.CharField(), required=False)
     affected = AffectedProduct(many=True, required=False)
 
-    def to_representation(self, instance: ContainerModel) -> dict[str, Any]:
+    def to_representation(self, instance: models.Container) -> dict[str, Any]:
         affected = [
             AffectedProduct().to_representation(product)
             for product in instance.affected.all()
@@ -154,10 +123,10 @@ class NixDerivation(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = NixDerivationModel
+        model = models.NixDerivation
         fields = ("attribute", "name", "system", "known_vulnerabilities")
 
-    def to_representation(self, instance: NixDerivationModel) -> dict[str, Any]:
+    def to_representation(self, instance: models.NixDerivation) -> dict[str, Any]:
         known: list[str] = []
         if instance.metadata_id is not None and instance.metadata is not None:
             known = list(instance.metadata.known_vulnerabilities or [])
@@ -173,15 +142,15 @@ class DerivationClusterProposalLink(serializers.ModelSerializer):
     derivation = NixDerivation()
 
     class Meta:
-        model = DerivationClusterProposalLinkModel
+        model = models.DerivationClusterProposalLink
         fields = ("derivation", "provenance_flags")
 
 
 class PackageOverlay(serializers.ModelSerializer):
-    type = serializers.ChoiceField(choices=PackageOverlayModel.Type.choices)
+    type = serializers.ChoiceField(choices=models.PackageOverlay.Type.choices)
 
     class Meta:
-        model = PackageOverlayModel
+        model = models.PackageOverlay
         fields = ("package_attribute", "type")
 
 
@@ -201,7 +170,7 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
     comment = serializers.CharField(allow_null=True, allow_blank=True, required=False)
 
     class Meta:
-        model = CVEDerivationClusterProposalModel
+        model = models.CVEDerivationClusterProposal
         fields = (
             "schema_version",
             "cve_id",
@@ -228,18 +197,18 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
         return value
 
     def get_ignored_packages(
-        self, obj: CVEDerivationClusterProposalModel
+        self, obj: models.CVEDerivationClusterProposal
     ) -> list[str]:
         return sorted(
             overlay.package_attribute
             for overlay in obj.package_overlays.all()
-            if overlay.type == PackageOverlayModel.Type.IGNORED
+            if overlay.type == models.PackageOverlay.Type.IGNORED
         )
 
     def get_kept_derivations(
-        self, obj: CVEDerivationClusterProposalModel
+        self, obj: models.CVEDerivationClusterProposal
     ) -> list[dict[str, str]]:
-        if obj.status == CVEDerivationClusterProposalModel.Status.REJECTED:
+        if obj.status == models.CVEDerivationClusterProposal.Status.REJECTED:
             return []
         ignored = set(self.get_ignored_packages(obj))
         kept = [
@@ -254,7 +223,7 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
         return sorted(kept, key=lambda d: (d["attribute"], d["name"], d["system"]))
 
     def to_representation(
-        self, instance: CVEDerivationClusterProposalModel
+        self, instance: models.CVEDerivationClusterProposal
     ) -> dict[str, Any]:
         container = _select_container(instance)
         if container is None:
@@ -304,7 +273,7 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
     @transaction.atomic
     def create(
         self, validated_data: dict[str, Any]
-    ) -> CVEDerivationClusterProposalModel:
+    ) -> models.CVEDerivationClusterProposal:
         """
         Materialize a training record on the synthetic benchmark channel.
 
@@ -317,11 +286,11 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
         links_data = validated_data.pop("derivationclusterproposallink_set", [])
         overlays_data = validated_data.pop("package_overlays", [])
 
-        CveRecord.objects.filter(cve_id=cve_id).delete()
+        models.CveRecord.objects.filter(cve_id=cve_id).delete()
         org = _ensure_organization()
 
-        cve = CveRecord.objects.create(cve_id=cve_id, assigner=org)
-        container = ContainerModel.objects.create(
+        cve = models.CveRecord.objects.create(cve_id=cve_id, assigner=org)
+        container = models.Container.objects.create(
             cve=cve,
             provider=org,
             title=f"Training data for {cve_id}",
@@ -329,28 +298,28 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
 
         tag_objs = []
         for value in container_data.get("tags") or []:
-            tag, _ = Tag.objects.get_or_create(value=value)
+            tag, _ = models.Tag.objects.get_or_create(value=value)
             tag_objs.append(tag)
         if tag_objs:
             container.tags.set(tag_objs)
 
         for affected_data in container_data.get("affected") or []:
-            affected = AffectedProductModel.objects.create(
+            affected = models.AffectedProduct.objects.create(
                 vendor=affected_data.get("vendor"),
                 product=affected_data.get("product"),
                 package_name=affected_data.get("package_name"),
             )
             for cpe_name in affected_data.get("cpes") or []:
-                cpe, _ = CpeModel.objects.get_or_create(name=cpe_name)
+                cpe, _ = models.Cpe.objects.get_or_create(name=cpe_name)
                 affected.cpes.add(cpe)
             container.affected.add(affected)
 
-        by_fingerprint: dict[tuple[str, str, str], NixDerivationModel] = {}
+        by_fingerprint: dict[tuple[str, str, str], models.NixDerivation] = {}
         for link_data in links_data:
             drv_data = link_data["derivation"]
             key = (drv_data["attribute"], drv_data["name"], drv_data["system"])
             if key not in by_fingerprint:
-                meta = NixDerivationMeta.objects.create(
+                meta = models.NixDerivationMeta.objects.create(
                     description="Imported training derivation",
                     homepage=None,
                     insecure=False,
@@ -362,7 +331,7 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
                         drv_data.get("known_vulnerabilities") or []
                     ),
                 )
-                by_fingerprint[key] = NixDerivationModel.objects.create(
+                by_fingerprint[key] = models.NixDerivation.objects.create(
                     attribute=drv_data["attribute"],
                     derivation_path=(
                         f"/nix/store/training-{secrets.token_hex(8)}"
@@ -374,7 +343,7 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
                     parent_evaluation=evaluation,
                 )
 
-        proposal = CVEDerivationClusterProposalModel.objects.create(
+        proposal = models.CVEDerivationClusterProposal.objects.create(
             cve=cve,
             status=validated_data["status"],
             rejection_reason=validated_data.get("rejection_reason"),
@@ -391,17 +360,17 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
             drv_data = link_data["derivation"]
             key = (drv_data["attribute"], drv_data["name"], drv_data["system"])
             link_objs.append(
-                DerivationClusterProposalLinkModel(
+                models.DerivationClusterProposalLink(
                     proposal=proposal,
                     derivation=by_fingerprint[key],
                     provenance_flags=link_data["provenance_flags"],
                 )
             )
         if link_objs:
-            DerivationClusterProposalLinkModel.objects.bulk_create(link_objs)
+            models.DerivationClusterProposalLink.objects.bulk_create(link_objs)
 
         for overlay in overlays_data:
-            PackageOverlayModel.objects.create(
+            models.PackageOverlay.objects.create(
                 suggestion=proposal,
                 package_attribute=overlay["package_attribute"],
                 type=overlay["type"],
