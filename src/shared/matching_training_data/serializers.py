@@ -12,7 +12,7 @@ Serializers are named after the models they read/write. Export with
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 from rest_framework import serializers
@@ -156,6 +156,11 @@ class DerivationClusterProposalLink(serializers.ModelSerializer):
         model = models.DerivationClusterProposalLink
         fields = ("derivation", "provenance_flags")
 
+    def to_representation(
+        self, instance: models.DerivationClusterProposalLink
+    ) -> dict[str, Any]:
+        return cast(dict[str, Any], super().to_representation(instance))
+
 
 class PackageOverlay(serializers.ModelSerializer):
     type = serializers.ChoiceField(choices=models.PackageOverlay.Type.choices)
@@ -163,6 +168,11 @@ class PackageOverlay(serializers.ModelSerializer):
     class Meta:
         model = models.PackageOverlay
         fields = ("package_attribute", "type")
+
+    def to_representation(
+        self, instance: models.PackageOverlay
+    ) -> dict[str, Any]:
+        return cast(dict[str, Any], super().to_representation(instance))
 
 
 class CVEDerivationClusterProposal(serializers.ModelSerializer):
@@ -247,24 +257,19 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
             DerivationClusterProposalLink().to_representation(link)
             for link in instance.derivationclusterproposallink_set.select_related(
                 "derivation__metadata"
+            ).order_by(
+                "derivation__attribute",
+                "derivation__name",
+                "derivation__system",
             )
         ]
-        links = sorted(
-            links,
-            key=lambda row: (
-                row["derivation"]["attribute"],
-                row["derivation"]["name"],
-                row["derivation"]["system"],
-            ),
-        )
         overlays = [
             PackageOverlay().to_representation(overlay)
-            for overlay in instance.package_overlays.all()
+            for overlay in instance.package_overlays.order_by(
+                "package_attribute",
+                "type",
+            )
         ]
-        overlays = sorted(
-            overlays,
-            key=lambda o: (o["package_attribute"], o["type"]),
-        )
 
         return {
             "schema_version": SCHEMA_VERSION,

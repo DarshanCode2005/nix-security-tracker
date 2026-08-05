@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Any, cast
 
 import pytest
 from rest_framework.exceptions import ValidationError
@@ -18,6 +19,10 @@ from shared.models.linkage import (
     ProvenanceFlags,
 )
 from shared.models.nix_evaluation import NixChannel, NixDerivation, NixEvaluation
+
+
+def _export(proposal: CVEDerivationClusterProposal) -> dict[str, Any]:
+    return cast(dict[str, Any], dict(mtd.CVEDerivationClusterProposal(proposal).data))
 
 
 def test_serializer_export_validates_like_api_payload(
@@ -43,15 +48,14 @@ def test_serializer_export_validates_like_api_payload(
         type=PackageOverlay.Type.IGNORED,
     )
 
-    record = mtd.CVEDerivationClusterProposal(proposal).data
+    record = _export(proposal)
     serializer = mtd.CVEDerivationClusterProposal(data=record)
     assert serializer.is_valid(), serializer.errors
-    assert serializer.validated_data["schema_version"] == SCHEMA_VERSION
-    assert serializer.validated_data["cve_id"] == "CVE-2026-9999"
-    assert len(serializer.validated_data["derivationclusterproposallink_set"]) == 2
-    assert serializer.validated_data["package_overlays"][0]["type"] == (
-        PackageOverlay.Type.IGNORED
-    )
+    validated = cast(dict[str, Any], serializer.validated_data)
+    assert validated["schema_version"] == SCHEMA_VERSION
+    assert validated["cve_id"] == "CVE-2026-9999"
+    assert len(validated["derivationclusterproposallink_set"]) == 2
+    assert validated["package_overlays"][0]["type"] == PackageOverlay.Type.IGNORED
 
 
 def test_schema_version_rejected(
@@ -63,7 +67,7 @@ def test_schema_version_rejected(
         status=CVEDerivationClusterProposal.Status.ACCEPTED,
         algorithm_version=1,
     )
-    record = mtd.CVEDerivationClusterProposal(proposal).data
+    record = _export(proposal)
     record["schema_version"] = SCHEMA_VERSION + 1
     serializer = mtd.CVEDerivationClusterProposal(data=record)
     with pytest.raises(ValidationError):
@@ -149,7 +153,7 @@ def test_export_import_export_roundtrip(
         type=PackageOverlay.Type.IGNORED,
     )
 
-    original = mtd.CVEDerivationClusterProposal(proposal).data
+    original = _export(proposal)
     assert original["schema_version"] == SCHEMA_VERSION
     assert original["cve_id"] == "CVE-2026-4242"
     assert original["status"] == "accepted"
@@ -167,14 +171,14 @@ def test_export_import_export_roundtrip(
 
     serializer = mtd.CVEDerivationClusterProposal(data=original)
     assert serializer.is_valid(), serializer.errors
-    imported = serializer.save()
+    imported = cast(CVEDerivationClusterProposal, serializer.save())
     assert imported.cve.cve_id == "CVE-2026-4242"
     assert imported.status == CVEDerivationClusterProposal.Status.ACCEPTED
     assert imported.derivations.count() == 2
     assert imported.package_overlays.filter(package_attribute="foobar.tests").exists()
     assert NixChannel.objects.filter(channel_branch=BENCHMARK_CHANNEL_BRANCH).exists()
 
-    reexported = mtd.CVEDerivationClusterProposal(imported).data
+    reexported = _export(imported)
     assert reexported == original
 
     imported_container = imported.cve.container.first()
@@ -197,7 +201,7 @@ def test_export_import_auto_reject_without_links(
         algorithm_version=CVEDerivationClusterProposal.CURRENT_ALGORITHM_VERSION,
     )
 
-    original = mtd.CVEDerivationClusterProposal(proposal).data
+    original = _export(proposal)
     assert original["kept_derivations"] == []
     assert original["derivationclusterproposallink_set"] == []
     assert "exclusively-hosted-service" in original["container"]["tags"]
@@ -205,8 +209,8 @@ def test_export_import_auto_reject_without_links(
     CveRecord.objects.filter(cve_id="CVE-2026-0007").delete()
     serializer = mtd.CVEDerivationClusterProposal(data=original)
     assert serializer.is_valid(), serializer.errors
-    imported = serializer.save()
-    reexported = mtd.CVEDerivationClusterProposal(imported).data
+    imported = cast(CVEDerivationClusterProposal, serializer.save())
+    reexported = _export(imported)
     assert reexported == original
 
     imported_container = imported.cve.container.first()
@@ -234,15 +238,15 @@ def test_import_is_idempotent_by_cve_id(
         derivation=make_drv(pname="foo", attribute="foo"),
         provenance_flags=int(ProvenanceFlags.PACKAGE_NAME_MATCH),
     )
-    record = mtd.CVEDerivationClusterProposal(proposal).data
+    record = _export(proposal)
 
     first_ser = mtd.CVEDerivationClusterProposal(data=record)
     assert first_ser.is_valid(), first_ser.errors
-    first = first_ser.save()
+    first = cast(CVEDerivationClusterProposal, first_ser.save())
 
     second_ser = mtd.CVEDerivationClusterProposal(data=record)
     assert second_ser.is_valid(), second_ser.errors
-    second = second_ser.save()
+    second = cast(CVEDerivationClusterProposal, second_ser.save())
 
     assert first.pk != second.pk
     assert (
