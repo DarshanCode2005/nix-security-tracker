@@ -61,14 +61,6 @@ def ensure_benchmark_evaluation() -> models.NixEvaluation:
     return evaluation
 
 
-def _ensure_organization() -> models.Organization:
-    org, _ = models.Organization.objects.get_or_create(
-        uuid=_TRAINING_ORG_UUID,
-        defaults={"short_name": "training-data"},
-    )
-    return org
-
-
 def _select_container(
     proposal: models.CVEDerivationClusterProposal,
 ) -> models.Container | None:
@@ -290,7 +282,10 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
         overlays_data = validated_data.pop("package_overlays", [])
 
         models.CveRecord.objects.filter(cve_id=cve_id).delete()
-        org = _ensure_organization()
+        org, _ = models.Organization.objects.get_or_create(
+            uuid=_TRAINING_ORG_UUID,
+            defaults={"short_name": "training-data"},
+        )
 
         cve = models.CveRecord.objects.create(cve_id=cve_id, assigner=org)
         container = models.Container.objects.create(
