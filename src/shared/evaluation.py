@@ -75,26 +75,38 @@ class EvaluatedAttribute(JSONWizard):
     system: str
 
     def as_key(self) -> tuple[str, str, str, str | None]:
-        """
-        Unique dictionary key for a derivation
-
-        These are the actual degrees of freedom for a derivation, judging from the data.
-        """
-        # FIXME(@fricklerhandwerk): We should only need the derivation path!
-        # Extract the extra fields to save more space.
-        # A `NixPackage` could indeed consist of just `pname` (parsed from `name`, validate against `attribute` and `drv_metadata.name`).
-        # Then we'd describe all occurrences of a `NixPackage` with
-        # - NixDerivation
-        # - attribute_name
-        # - metadata__name
-        # - parent_evaluation (also extracted since derivation paths of close-to-root packages can be the same across evaluations)
-        # - version (also parsed from `name`, for easier querying)
-        return (
-            self.drv_path,
-            self.attr,
-            self.name,
-            self.meta.name or None if self.meta else None,
+        """Unique dictionary key for a derivation (see :func:`derivation_as_key`)."""
+        return derivation_as_key(
+            drv_path=self.drv_path,
+            attr=self.attr,
+            name=self.name,
+            meta_name=self.meta.name or None if self.meta else None,
         )
+
+
+def derivation_as_key(
+    *,
+    drv_path: str,
+    attr: str,
+    name: str,
+    meta_name: str | None,
+) -> tuple[str, str, str, str | None]:
+    """
+    Unique dictionary key for a derivation.
+
+    These are the actual degrees of freedom for a derivation, judging from the data.
+    Shared by evaluation ingestion and matching training-data import.
+    """
+    # FIXME(@fricklerhandwerk): We should only need the derivation path!
+    # Extract the extra fields to save more space.
+    # A `NixPackage` could indeed consist of just `pname` (parsed from `name`, validate against `attribute` and `drv_metadata.name`).
+    # Then we'd describe all occurrences of a `NixPackage` with
+    # - NixDerivation
+    # - attribute_name
+    # - metadata__name
+    # - parent_evaluation (also extracted since derivation paths of close-to-root packages can be the same across evaluations)
+    # - version (also parsed from `name`, for easier querying)
+    return (drv_path, attr, name, meta_name)
 
 
 @dataclass

@@ -7,7 +7,6 @@ Serializers are named after the models they read/write. Export with
 
 from __future__ import annotations
 
-import secrets
 import uuid
 from typing import Any
 
@@ -15,6 +14,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from shared import models
+from shared.evaluation import derivation_as_key
 
 SCHEMA_VERSION = 1
 
@@ -68,6 +68,11 @@ def _select_container(
         proposal.cve.container.filter(affected__package_name__isnull=False).first()
         or proposal.cve.container.first()
     )
+
+
+def _training_drv_path(*, attribute: str, name: str, system: str) -> str:
+    """Stable synthetic drv path so :func:`derivation_as_key` stays deterministic."""
+    return f"/nix/store/training-{attribute}-{name}-{system}.drv"
 
 
 class AffectedProduct(serializers.ModelSerializer):
@@ -159,6 +164,7 @@ class PackageOverlay(serializers.ModelSerializer):
 class CVEDerivationClusterProposal(serializers.ModelSerializer):
     """Versioned matching training-data record (export/import wire format)."""
 
+    # Not model fields, must be declared (wire-only version gate + cve.cve_id).
     schema_version = serializers.IntegerField()
     cve_id = serializers.CharField()
     container = Container()
@@ -319,10 +325,27 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
                 affected.cpes.add(cpe)
             container.affected.add(affected)
 
-        by_fingerprint: dict[tuple[str, str, str], models.NixDerivation] = {}
+        by_fingerprint: dict[
+            tuple[str, str, str, str | None], models.NixDerivation
+        ] = {}
         for link_data in links_data:
             drv_data = link_data["derivation"]
-            key = (drv_data["attribute"], drv_data["name"], drv_data["system"])
+            attribute = drv_data["attribute"]
+            name = drv_data["name"]
+            system = drv_data["system"]
+            drv_path = _training_drv_path(
+                attribute=attribute, name=name, system=system
+            )
+            # Same uniqueness degrees of freedom as evaluation ingestion
+            # (shared.evaluation.derivation_as_key). Training JSON has no real
+            # drv_path, so we use a deterministic synthetic path that embeds
+            # attribute/name/system.
+            key = derivation_as_key(
+                drv_path=drv_path,
+                attr=attribute,
+                name=name,
+                meta_name=name,
+            )
             if key not in by_fingerprint:
                 meta = models.NixDerivationMeta.objects.create(
                     description="Imported training derivation",
@@ -337,14 +360,11 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
                     ),
                 )
                 by_fingerprint[key] = models.NixDerivation.objects.create(
-                    attribute=drv_data["attribute"],
-                    derivation_path=(
-                        f"/nix/store/training-{secrets.token_hex(8)}"
-                        f"-{drv_data['name']}.drv"
-                    ),
-                    name=drv_data["name"],
+                    attribute=attribute,
+                    derivation_path=drv_path,
+                    name=name,
                     metadata=meta,
-                    system=drv_data["system"],
+                    system=system,
                     parent_evaluation=evaluation,
                 )
 
@@ -363,7 +383,17 @@ class CVEDerivationClusterProposal(serializers.ModelSerializer):
         link_objs = []
         for link_data in links_data:
             drv_data = link_data["derivation"]
-            key = (drv_data["attribute"], drv_data["name"], drv_data["system"])
+            attribute = drv_data["attribute"]
+            name = drv_data["name"]
+            system = drv_data["system"]
+            key = derivation_as_key(
+                drv_path=_training_drv_path(
+                    attribute=attribute, name=name, system=system
+                ),
+                attr=attribute,
+                name=name,
+                meta_name=name,
+            )
             link_objs.append(
                 models.DerivationClusterProposalLink(
                     proposal=proposal,
