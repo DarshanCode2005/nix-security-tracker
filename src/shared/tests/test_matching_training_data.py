@@ -110,8 +110,13 @@ def test_user_curated_proposals_excludes_pending(
     curated_pks = set(
         CVEDerivationClusterProposal.objects.user_curated().values_list("pk", flat=True)
     )
+    untouched_pks = set(
+        CVEDerivationClusterProposal.objects.untouched().values_list("pk", flat=True)
+    )
     assert pending.pk not in curated_pks
     assert accepted.pk in curated_pks
+    assert pending.pk in untouched_pks
+    assert accepted.pk not in untouched_pks
 
 
 def test_export_import_export_roundtrip(
