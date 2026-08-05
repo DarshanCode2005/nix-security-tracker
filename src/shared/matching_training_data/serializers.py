@@ -75,7 +75,12 @@ class AffectedProduct(serializers.ModelSerializer):
 
     class Meta:
         model = models.AffectedProduct
-        fields = ("vendor", "product", "package_name", "cpes")
+        fields = (
+            "vendor",
+            "product",
+            "package_name",
+            "cpes",
+        )
 
     def to_representation(self, instance: models.AffectedProduct) -> dict[str, Any]:
         return {
