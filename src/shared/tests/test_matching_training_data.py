@@ -20,58 +20,30 @@ from shared.models.linkage import (
 from shared.models.nix_evaluation import NixChannel, NixDerivation, NixEvaluation
 
 
-def _sample_record() -> dict:
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "cve_id": "CVE-2026-9999",
-        "container": {
-            "tags": ["exclusively-hosted-service"],
-            "affected": [
-                {
-                    "vendor": "acme",
-                    "product": "widget",
-                    "package_name": "foo",
-                    "cpes": ["cpe:2.3:a:acme:widget:1.0:*:*:*:*:*:*:*"],
-                },
-            ],
+def test_serializer_export_validates_like_api_payload(
+    make_container: Callable[..., Container],
+    make_suggestion: Callable[..., CVEDerivationClusterProposal],
+    make_drv: Callable[..., NixDerivation],
+) -> None:
+    """Export from fixtures, then re-validate, same path as the training-data API."""
+    foo = make_drv(pname="foo", attribute="foo")
+    foo_tests = make_drv(pname="foo-tests", attribute="foo.tests")
+    proposal = make_suggestion(
+        container=make_container(cve_id="CVE-2026-9999", package_name="foo"),
+        status=CVEDerivationClusterProposal.Status.ACCEPTED,
+        algorithm_version=1,
+        drvs={
+            foo: ProvenanceFlags.PACKAGE_NAME_MATCH,
+            foo_tests: ProvenanceFlags.PACKAGE_NAME_MATCH,
         },
-        "status": "accepted",
-        "rejection_reason": None,
-        "comment": None,
-        "rejection_match_count": None,
-        "rejection_max_matches_limit": None,
-        "algorithm_version": 1,
-        "derivationclusterproposallink_set": [
-            {
-                "derivation": {
-                    "attribute": "foo",
-                    "name": "foo-1.0",
-                    "system": "x86_64-linux",
-                    "known_vulnerabilities": [],
-                },
-                "provenance_flags": int(ProvenanceFlags.PACKAGE_NAME_MATCH),
-            },
-            {
-                "derivation": {
-                    "attribute": "foo.tests",
-                    "name": "foo-tests-1.0",
-                    "system": "x86_64-linux",
-                    "known_vulnerabilities": [],
-                },
-                "provenance_flags": int(ProvenanceFlags.PACKAGE_NAME_MATCH),
-            },
-        ],
-        "package_overlays": [
-            {
-                "package_attribute": "foo.tests",
-                "type": PackageOverlay.Type.IGNORED,
-            },
-        ],
-    }
+    )
+    PackageOverlay.objects.create(
+        suggestion=proposal,
+        package_attribute="foo.tests",
+        type=PackageOverlay.Type.IGNORED,
+    )
 
-
-def test_schema_dict_roundtrip_preserves_fields() -> None:
-    record = _sample_record()
+    record = mtd.CVEDerivationClusterProposal(proposal).data
     serializer = mtd.CVEDerivationClusterProposal(data=record)
     assert serializer.is_valid(), serializer.errors
     assert serializer.validated_data["schema_version"] == SCHEMA_VERSION
@@ -82,8 +54,16 @@ def test_schema_dict_roundtrip_preserves_fields() -> None:
     )
 
 
-def test_schema_version_rejected() -> None:
-    record = _sample_record()
+def test_schema_version_rejected(
+    make_container: Callable[..., Container],
+    make_suggestion: Callable[..., CVEDerivationClusterProposal],
+) -> None:
+    proposal = make_suggestion(
+        container=make_container(cve_id="CVE-2026-bad-ver"),
+        status=CVEDerivationClusterProposal.Status.ACCEPTED,
+        algorithm_version=1,
+    )
+    record = mtd.CVEDerivationClusterProposal(proposal).data
     record["schema_version"] = SCHEMA_VERSION + 1
     serializer = mtd.CVEDerivationClusterProposal(data=record)
     with pytest.raises(ValidationError):
