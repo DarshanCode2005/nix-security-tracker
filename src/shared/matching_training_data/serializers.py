@@ -22,6 +22,9 @@ SCHEMA_VERSION = 1
 BENCHMARK_CHANNEL_BRANCH = "benchmark"
 BENCHMARK_RELEASE_BRANCH = "benchmark-master"
 
+# Fixed dummy git SHA so get_or_create stays obviously idempotent.
+_BENCHMARK_DUMMY_SHA1 = "0" * 40
+
 # Stable org for imported training CVEs
 _TRAINING_ORG_UUID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
@@ -30,14 +33,14 @@ def ensure_benchmark_evaluation() -> models.NixEvaluation:
     """Create or reuse the synthetic benchmark channel + completed evaluation."""
     release_branch, _ = models.NixpkgsBranch.objects.get_or_create(
         name=BENCHMARK_RELEASE_BRANCH,
-        defaults={"head_sha1_commit": secrets.token_hex(20)},
+        defaults={"head_sha1_commit": _BENCHMARK_DUMMY_SHA1},
     )
     channel, _ = models.NixChannel.objects.get_or_create(
         channel_branch=BENCHMARK_CHANNEL_BRANCH,
         defaults={
             "release_branch": release_branch,
             "state": models.NixChannel.ChannelState.UNSTABLE,
-            "head_sha1_commit": secrets.token_hex(20),
+            "head_sha1_commit": _BENCHMARK_DUMMY_SHA1,
             "variant": None,
         },
     )
@@ -52,7 +55,7 @@ def ensure_benchmark_evaluation() -> models.NixEvaluation:
     if evaluation is None:
         evaluation = models.NixEvaluation.objects.create(
             channel=channel,
-            commit_sha1=secrets.token_hex(20),
+            commit_sha1=_BENCHMARK_DUMMY_SHA1,
             state=models.NixEvaluation.EvaluationState.COMPLETED,
         )
     return evaluation
