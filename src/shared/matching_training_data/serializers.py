@@ -169,9 +169,7 @@ class PackageOverlay(serializers.ModelSerializer):
         model = models.PackageOverlay
         fields = ("package_attribute", "type")
 
-    def to_representation(
-        self, instance: models.PackageOverlay
-    ) -> dict[str, Any]:
+    def to_representation(self, instance: models.PackageOverlay) -> dict[str, Any]:
         return cast(dict[str, Any], super().to_representation(instance))
 
 
