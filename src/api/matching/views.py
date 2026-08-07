@@ -7,9 +7,9 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.matching.serializers import MatchingTrainingRecordSerializer
 from api.serializers import ErrorDetailSerializer
 from shared.auth import can_access_matching_training_data
+from shared.matching_training_data import serializers
 from shared.models.linkage import (
     CVEDerivationClusterProposal,
     DerivationClusterProposalLink,
@@ -32,7 +32,7 @@ class MatchingTrainingDataView(ListAPIView):
 
     permission_classes = [IsAuthenticated, CanAccessMatchingTrainingData]
     pagination_class = MatchingTrainingDataPagination
-    serializer_class = MatchingTrainingRecordSerializer
+    serializer_class = serializers.CVEDerivationClusterProposal
 
     def get_queryset(self) -> QuerySet[CVEDerivationClusterProposal]:  # pyright: ignore[reportIncompatibleMethodOverride]
         return (
@@ -61,7 +61,7 @@ class MatchingTrainingDataView(ListAPIView):
             "assigned) as a stopgap for server load until rate limiting exists."
         ),
         responses={
-            200: MatchingTrainingRecordSerializer,
+            200: serializers.CVEDerivationClusterProposal,
             401: ErrorDetailSerializer,
             403: ErrorDetailSerializer,
         },
