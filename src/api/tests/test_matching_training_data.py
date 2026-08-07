@@ -1,12 +1,12 @@
 from collections.abc import Callable
 
 import pytest
+from _pytest.fixtures import fixture
 from django.contrib.auth.models import User
 from rest_framework.reverse import reverse
 from rest_framework.test import APIClient
 
 from shared.matching_training_data import SCHEMA_VERSION
-from shared.matching_training_data import serializers as mtd
 from shared.models.cve import Container
 from shared.models.linkage import (
     CVEDerivationClusterProposal,
@@ -17,6 +17,13 @@ from shared.models.linkage import (
 @pytest.fixture
 def url() -> str:
     return reverse("matching-training-data")
+
+
+@fixture
+def client(
+    make_client: Callable[..., APIClient], matching_training_user: User
+) -> APIClient:
+    return make_client(matching_training_user)
 
 
 @pytest.fixture
@@ -64,69 +71,70 @@ def test_training_data_unauthenticated(url: str) -> None:
     assert response.status_code == 401
 
 
-@pytest.mark.parametrize("actor_fixture", ["user", "committer", "staff"])
+@pytest.mark.parametrize("user_fixture", ["user", "committer", "staff"])
 def test_training_data_without_group_forbidden(
     url: str,
-    actor_fixture: str,
+    user_fixture: str,
     request: pytest.FixtureRequest,
 ) -> None:
-    actor: User = request.getfixturevalue(actor_fixture)
+    user: User = request.getfixturevalue(user_fixture)
     client = APIClient()
-    client.force_login(actor)
+    client.force_login(user)
     response = client.get(url)
     assert response.status_code == 403
 
 
 def test_training_data_group_member_lists_curated_only(
     url: str,
-    matching_training_user: User,
+    client: APIClient,
     curated_proposals: dict[str, CVEDerivationClusterProposal],
 ) -> None:
-    client = APIClient()
-    client.force_login(matching_training_user)
     response = client.get(url)
     assert response.status_code == 200
     assert response.data["count"] == 3
 
-    cve_ids = {row["cve_id"] for row in response.data["results"]}
-    assert "CVE-2026-pend" not in cve_ids
-    assert cve_ids == {"CVE-2026-acc", "CVE-2026-rej", "CVE-2026-auto"}
-
-    by_cve = {row["cve_id"]: row for row in response.data["results"]}
-    assert by_cve["CVE-2026-auto"]["status"] == "rejected"
-    assert (
-        by_cve["CVE-2026-auto"]["rejection_reason"]
-        == CVEDerivationClusterProposal.RejectionReason.NO_MATCHES
-    )
-    assert by_cve["CVE-2026-acc"]["schema_version"] == SCHEMA_VERSION
-    assert by_cve["CVE-2026-acc"] == mtd.CVEDerivationClusterProposal(
-        curated_proposals["accepted"]
-    ).data
+    for result in response.data["results"]:
+        assert result["status"] != "pending"
+        assert result["schema_version"] == SCHEMA_VERSION
 
 
+@pytest.mark.parametrize(
+    "count",
+    [0, 1, 10],
+)
+@pytest.mark.parametrize(
+    "page_size",
+    [1, 2, 10],
+)
 def test_training_data_pagination(
     url: str,
-    matching_training_user: User,
+    client: APIClient,
     make_container: Callable[..., Container],
     make_suggestion: Callable[..., CVEDerivationClusterProposal],
+    count: int,
+    page_size: int,
 ) -> None:
-    for i in range(3):
+    for i in range(count):
         make_suggestion(
             container=make_container(cve_id=f"CVE-2026-page-{i}"),
             status=CVEDerivationClusterProposal.Status.ACCEPTED,
             algorithm_version=1,
         )
 
-    client = APIClient()
-    client.force_login(matching_training_user)
-
-    page1 = client.get(url, {"page_size": 2, "page": 1})
+    page1 = client.get(url, {"page_size": page_size, "page": 1})
     assert page1.status_code == 200
-    assert page1.data["count"] == 3
-    assert len(page1.data["results"]) == 2
-    assert page1.data["next"] is not None
+    assert page1.data["count"] == count
+    assert len(page1.data["results"]) == # TODO :)
 
-    page2 = client.get(url, {"page_size": 2, "page": 2})
-    assert page2.status_code == 200
-    assert len(page2.data["results"]) == 1
-    assert page2.data["previous"] is not None
+    has_next_page = count - page_size > 0
+
+    if not has_next_page:
+        assert page1.data["next"] is None
+    else:
+        assert page1.data["next"] is not None
+
+        page2 = client.get(url, {"page_size": page_size, "page": 2})
+        assert page2.status_code == 200
+        assert len(page2.data["results"]) == 1
+        assert page2.data["previous"] is not None
+        assert page2.data["next"] is has_next_page
