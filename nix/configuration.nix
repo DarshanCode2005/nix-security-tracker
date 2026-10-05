@@ -359,7 +359,7 @@ in
         enable = true;
         openFirewall = true;
         configuration.jobs.sectracker = {
-          queries = import ../infra/sql-exporter-queries.nix;
+          queries = import ../infra/sql-exporter-queries.nix // import ../infra/application-metrics.nix;
           connections =
             let
               db-name = builtins.head config.services.postgresql.ensureDatabases;
