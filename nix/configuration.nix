@@ -651,7 +651,11 @@ in
               "nix-security-tracker-worker.service"
             ];
             wantedBy = [ ];
-            serviceConfig.Type = "oneshot";
+            serviceConfig = {
+              Type = "oneshot";
+              # Make performance metrics file, produced as a side effect, readable by Prometheus node exporter
+              UMask = "0027";
+            };
 
             script = ''
               ${manage.name} ingest_delta_cve "$(date --date='yesterday' --iso)" ${
@@ -675,7 +679,11 @@ in
               "nix-security-tracker-migrations.service"
             ];
             wantedBy = [ ];
-            serviceConfig.Type = "oneshot";
+            serviceConfig = {
+              Type = "oneshot";
+              # Make performance metrics file, produced as a side effect, readable by Prometheus node exporter
+              UMask = "0027";
+            };
 
             script = ''
               ${manage.name} garbage_collect
